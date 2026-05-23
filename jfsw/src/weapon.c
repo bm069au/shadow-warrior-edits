@@ -17564,7 +17564,8 @@ int
 DoBrettNukeRabbitTimer(SHORT Weapon)
     {
     USERp u = User[Weapon];
-    short i;
+	short i;
+	short rabbit;
 
     if (!u)
         return(FALSE);
@@ -17575,7 +17576,9 @@ DoBrettNukeRabbitTimer(SHORT Weapon)
         {
         for (i = 0; i < 2; i++)
             {
-            BunnyHatch2(Weapon);
+            rabbit = BunnyHatch2(Weapon);
+            if (rabbit >= 0)
+                sprite[rabbit].hitag = 1977;
             }
 
         KillSprite(Weapon);

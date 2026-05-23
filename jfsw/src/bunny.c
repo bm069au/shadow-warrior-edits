@@ -1316,6 +1316,26 @@ DoBunnyMove(short SpriteNum)
     {
     SPRITEp sp = &sprite[SpriteNum];
     USERp u = User[SpriteNum];
+	    // Brett Edit - Nuke-spawned rabbits act as silent proximity mines.
+		// Tagged in weapon.c by DoBrettNukeRabbitTimer using hitag 1977.
+		if (sp->hitag == 1977)
+			{
+			int dist, a, b, c;
+
+			DoActorPickClosePlayer(SpriteNum);
+
+			if (u->tgt_sp)
+				{
+				DISTANCE(u->tgt_sp->x, u->tgt_sp->y, sp->x, sp->y, dist, a, b, c);
+
+				if (dist < 1200)
+                {
+                SpawnMineExp(SpriteNum);
+				SetSuicide(SpriteNum);
+				return(0);
+                }
+            }
+        }
 
     // Parental lock crap
     if(TEST(sp->cstat, CSTAT_SPRITE_INVISIBLE))
