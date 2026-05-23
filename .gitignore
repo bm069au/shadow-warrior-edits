@@ -1,0 +1,13 @@
+﻿.vs/
+*.user
+*.zip
+*.obj
+*.exe
+*.pdb
+*.ilk
+Debug/
+Release/
+x64/
+Win32/
+dist/
+build/
