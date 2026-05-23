@@ -11450,8 +11450,31 @@ if (RANDOM_P2(1024) < 100)
         }
     }
 
+// Brett Edit - Rare railgun drop after nuclear explosion.
+// Lower chance than guardian head so nuke loot stays special, not guaranteed.
+	       if (RANDOM_P2(1024) < 40)
+    {
+    extern STATE s_IconRailGun[];
+    short railgun;
+
+    railgun = SpawnSprite(STAT_ITEM, ICON_RAIL_GUN, s_IconRailGun,
+        sprite[explosion].sectnum,
+        sprite[explosion].x,
+        sprite[explosion].y,
+        sprite[explosion].z,
+        sprite[explosion].ang,
+        0);
+
+    if (railgun >= 0)
+        {
+        SET(User[railgun]->Flags2, SPR2_NEVER_RESPAWN);
+        IconDefault(railgun);
+        sprite[railgun].xrepeat = 64;
+        sprite[railgun].yrepeat = 64;
+        }
+    }
 // Brett Edit - Delayed rabbit outbreak after nuclear explosion.
-// Hidden BLANK timer waits 25 seconds, then spawns 2 rabbits after nuke danger clears.
+
 SpawnBrettNukeRabbitTimer(explosion);
 
 return(explosion);
