@@ -163,7 +163,7 @@ STATE s_Suicide[] =
 	// Original behavior: no delayed post-nuke rabbit timer actor.
 STATE s_BrettNukeRabbitTimer[] =
     {
-    {0, 10, DoBrettNukeRabbitTimer, &s_BrettNukeRabbitTimer[0]}
+    {BLANK, 10, DoBrettNukeRabbitTimer, &s_BrettNukeRabbitTimer[0]}
     };
 
 STATE s_DeadLoWang[] =
@@ -9017,6 +9017,40 @@ extern STATE s_Phosphorus[];
 // Bretts edit weapon head after nuke. 
 extern STATE s_IconGuardHead[];
 
+//Wabbit prompt stuff - GPT forgets to commented
+int
+SpawnBrettNukeRabbitTimer(SHORT Weapon)
+    {
+    SPRITEp sp = &sprite[Weapon];
+    short timer;
+    USERp tu;
+
+    timer = SpawnSprite(STAT_MISSILE, BLANK, s_BrettNukeRabbitTimer,
+        sp->sectnum, sp->x, sp->y, sp->z, sp->ang, 0);
+
+    if (timer < 0)
+        return(-1);
+
+    tu = User[timer];
+
+    SetOwner(sp->owner, timer);
+
+    sprite[timer].xrepeat = 0;
+    sprite[timer].yrepeat = 0;
+    SET(sprite[timer].cstat, CSTAT_SPRITE_INVISIBLE);
+    RESET(sprite[timer].cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+//Bretts edit Sec (??) is the time delay from nuke to wabbit birth
+    if (tu)
+        {
+        tu->WaitTics = SEC(45);
+        tu->xchange = 0;
+        tu->ychange = 0;
+        tu->zchange = 0;
+        }
+
+    return(timer);
+    }
+	
 int
 DoGrenade(SHORT Weapon)
     {
@@ -11416,22 +11450,10 @@ if (RANDOM_P2(1024) < 100)
         }
     }
 
-// Brett Edit - Immediate rabbit outbreak after nuclear explosion.
-// Original behavior: no rabbit outbreak after nuke.
-// Test version: spawn 2 rabbits immediately. No timer.
-{
-short i;
-
-for (i = 0; i < 2; i++)
-    {
-	BunnyHatch2(explosion);
-	}
-}
-//Bretts edit linked to flame sprite marker
-//SpawnBrettNukeRabbitFlameTimer(explosion); (Weird forever flame)
-
 // Brett Edit - Delayed rabbit outbreak after nuclear explosion.
-// DISABLED: previous hidden timer sprite caused nuke-explosion crash.
+// Hidden BLANK timer waits 25 seconds, then spawns 2 rabbits after nuke danger clears.
+SpawnBrettNukeRabbitTimer(explosion);
+
 return(explosion);
 }
 
