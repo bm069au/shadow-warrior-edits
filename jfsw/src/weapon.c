@@ -23,6 +23,9 @@ Original Source: 1997 - Frank Maddin and Jim Norwood
 Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 */
 //-------------------------------------------------------------------------
+#include <stdio.h>
+#include <time.h>
+
 #include "build.h"
 
 #include "keys.h"
@@ -45,6 +48,51 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "actor.h"
 #include "track.h"
 #include "player.h"
+
+// BRETT DEBUG MARKER - tiny crash breadcrumb system
+// Overwrites one small file with the last custom-code checkpoint reached.
+// Not a full log. Intended to help identify the last mod area touched before a crash.
+// Darren will not have same file structure - attempt to log on Bretts machine
+
+static void BrettCrashMark(const char *code, const char *file, int line, const char *func, const char *note)
+    {
+    FILE *fp;
+    time_t now;
+    struct tm *lt;
+    char timestr[64];
+
+    fp = fopen("E:\\Visual_studio\\ShadowWarriorEdits\\jfsw\\brett_crash_marker.txt", "w");
+
+	if (!fp)
+		fp = fopen("brett_crash_marker.txt", "w");
+
+    if (fp)
+        {
+        now = time(NULL);
+        lt = localtime(&now);
+
+        if (lt)
+            {
+            strftime(timestr, sizeof(timestr), "%Y-%m-%d %H:%M:%S", lt);
+            }
+        else
+            {
+            strcpy(timestr, "time unavailable");
+            }
+
+        fprintf(fp, "BRETT CRASH MARKER\n");
+        fprintf(fp, "TIME: %s\n", timestr);
+        fprintf(fp, "CODE: %s\n", code);
+        fprintf(fp, "FILE: %s\n", file);
+        fprintf(fp, "LINE: %d\n", line);
+        fprintf(fp, "FUNC: %s\n", func);
+        fprintf(fp, "NOTE: %s\n", note);
+        fclose(fp);
+        }
+    }
+    
+
+#define BRETT_MARK(code, note) BrettCrashMark(code, __FILE__, __LINE__, "weapon.c", note)
 
 //
 // Damage Amounts defined in damage.h
@@ -5772,12 +5820,37 @@ PlayerCheckDeath(PLAYERp pp, short Weapon)
 		short i;
 
 		// Brett edit:
-		// Spawn 7 rabbits when player dies.
-		for (i = 0; i < 7; i++)
+		// Spawn 2 rabbits when player dies.
+		for (i = 0; i < 2; i++)
 		{
     BunnyHatch2(pp->PlayerSprite);
 		}
 
+// Brett edit:
+// Rare railgun drop when player dies.
+// Moved from nuke so nuke does not carry multiple random reward systems.
+if (RANDOM_P2(1024) < 200)
+    {
+    extern STATE s_IconRailGun[];
+    short railgun;
+
+    railgun = SpawnSprite(STAT_ITEM, ICON_RAIL_GUN, s_IconRailGun,
+        sprite[pp->PlayerSprite].sectnum,
+        sprite[pp->PlayerSprite].x,
+        sprite[pp->PlayerSprite].y,
+        sprite[pp->PlayerSprite].z,
+        sprite[pp->PlayerSprite].ang,
+        0);
+
+    if (railgun >= 0)
+        {
+        SET(User[railgun]->Flags2, SPR2_NEVER_RESPAWN);
+        IconDefault(railgun);
+        sprite[railgun].xrepeat = 64;
+        sprite[railgun].yrepeat = 64;
+        }
+    }
+	
         // pick a death type
         if (u->LastDamage >= PLAYER_DEATH_EXPLODE_DAMMAGE_AMT)
             pp->DeathType = PLAYER_DEATH_EXPLODE;
@@ -11337,13 +11410,15 @@ SpawnNuclearSecondaryExp(SHORT Weapon, short ang)
 int
 SpawnNuclearExp(SHORT Weapon)
     {
-    SPRITEp sp = &sprite[Weapon];
+	SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
     SPRITEp exp;
     USERp eu;
     short explosion,ang=0;
     PLAYERp pp = NULL;
     short rnd_rng;
+	
+BRETT_MARK("NUK-001", "entered SpawnNuclearExp");
 
     ASSERT(u);
     if (u && TEST(u->Flags, SPR_SUICIDE))
@@ -11351,8 +11426,10 @@ SpawnNuclearExp(SHORT Weapon)
 
     PlaySound(DIGI_NUCLEAREXP, &sp->x, &sp->y, &sp->z, v3df_dontpan | v3df_doppler);
 
-    if(sp->owner)
-        {
+BRETT_MARK("NUK-002", "before owner/player lookup");
+
+if(sp->owner)
+		{
         pp = User[sp->owner]->PlayerP;
         rnd_rng = RANDOM_RANGE(1000);
 
@@ -11365,7 +11442,7 @@ SpawnNuclearExp(SHORT Weapon)
         if(rnd_rng > 970)
             PlayerSound(DIGI_LIKEPEARL,&pp->posx,&pp->posy,&pp->posz,v3df_follow|v3df_dontpan,pp);
         }
-
+BRETT_MARK("NUK-003", "before mushroom cloud spawn");
     // Spawn big mushroom cloud
     explosion = SpawnSprite(STAT_MISSILE, MUSHROOM_CLOUD, s_NukeMushroom, sp->sectnum,
         sp->x, sp->y, sp->z, sp->ang, 0);
@@ -11426,9 +11503,11 @@ SpawnNuclearExp(SHORT Weapon)
     SpawnNuclearSecondaryExp(explosion, ang);
     ang = ang + 512 + RANDOM_P2(256);
     SpawnNuclearSecondaryExp(explosion, ang);
+BRETT_MARK("NUK-004", "before custom nuke extras");
+SpawnBrettNukeRabbitTimer(explosion);
 // Brett Edit - Rare guard head drop after nuclear explosion.
 // Original behavior: no item spawn after nuke.
-if (RANDOM_P2(1024) < 100)
+if (RANDOM_P2(1024) < 80)
     // Brett Edit - hash out above and enable below line to get 100% head spawn.
     // if (1)
     {
@@ -11444,15 +11523,17 @@ if (RANDOM_P2(1024) < 100)
 
     // Do NOT use SetSuicide(head); it caused crash suspicion.
     if (head >= 0)
-        {
-        sprite[head].xrepeat = 64;
-        sprite[head].yrepeat = 64;
-        }
+    {
+    SET(User[head]->Flags2, SPR2_NEVER_RESPAWN);
+    IconDefault(head);
+    sprite[head].xrepeat = 64;
+    sprite[head].yrepeat = 64;
+    }
     }
 
 // Brett Edit - Rare railgun drop after nuclear explosion.
 // Lower chance than guardian head so nuke loot stays special, not guaranteed.
-	       if (RANDOM_P2(1024) < 40)
+	      if (0) // moved railgun drop to player death
     {
     extern STATE s_IconRailGun[];
     short railgun;
@@ -11474,9 +11555,10 @@ if (RANDOM_P2(1024) < 100)
         }
     }
 // Brett Edit - Delayed rabbit outbreak after nuclear explosion.
+// Disabled duplicate timer call - timer is already spawned above near NUK-004.
+// SpawnBrettNukeRabbitTimer(explosion);
 
-SpawnBrettNukeRabbitTimer(explosion);
-
+BRETT_MARK("NUK-005", "SpawnNuclearExp before return");
 return(explosion);
 }
 
@@ -17574,15 +17656,19 @@ DoBrettNukeRabbitTimer(SHORT Weapon)
 
     if (u->WaitTics <= 0)
         {
-        for (i = 0; i < 2; i++)
-            {
-            rabbit = BunnyHatch2(Weapon);
-            if (rabbit >= 0)
-                sprite[rabbit].hitag = 1977;
-            }
+		BRETT_MARK("RABT-001", "timer expired before rabbit hatch");
 
-        KillSprite(Weapon);
-        return(FALSE);
+		for (i = 0; i < 2; i++)
+    {
+    rabbit = BunnyHatch2(Weapon);
+BRETT_MARK("RABT-001A", "after BunnyHatch2 returned");
+if (rabbit >= 0)
+    sprite[rabbit].hitag = 1977;
+    }
+
+BRETT_MARK("RABT-002", "after hatch before cleanup");
+KillSprite(Weapon);
+return(FALSE);
         }
 
     return(FALSE);
