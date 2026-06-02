@@ -9604,6 +9604,12 @@ DoMineStuck(SHORT Weapon)
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
     #define MINE_DETONATE_STATE 99
+	
+	if (gNet.TimeLimit && gNet.TimeLimitClock <= (60 * 120))
+	{
+	KillSprite(Weapon);
+	return(FALSE);
+	}
 
     // if no owner then die
     if (u->Attach >= 0)
@@ -10079,10 +10085,17 @@ DoEMP(SHORT Weapon)
 int
 DoEMPBurst(SHORT Weapon)
     {
-    SPRITEp sp = &sprite[Weapon];
-    USERp u = User[Weapon];
 
-    if (u->Attach >= 0)
+    SPRITEp sp = &sprite[Weapon];
+USERp u = User[Weapon];
+
+if (gNet.TimeLimit && gNet.TimeLimitClock <= (60 * 120))
+    {
+    KillSprite(Weapon);
+    return(FALSE);
+    }
+
+if (u->Attach >= 0)
         {
         SPRITEp ap = &sprite[u->Attach];
 
@@ -17649,10 +17662,16 @@ DoBrettNukeRabbitTimer(SHORT Weapon)
 	short i;
 	short rabbit;
 
-    if (!u)
-        return(FALSE);
+if (!u)
+    return(FALSE);
 
-    u->WaitTics -= (MISSILEMOVETICS * 2);
+if (gNet.TimeLimit && gNet.TimeLimitClock <= (60 * 120))
+    {
+    KillSprite(Weapon);
+    return(FALSE);
+    }
+
+u->WaitTics -= (MISSILEMOVETICS * 2);
 
     if (u->WaitTics <= 0)
         {
