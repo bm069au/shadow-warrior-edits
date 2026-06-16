@@ -1328,12 +1328,18 @@ DoBunnyMove(short SpriteNum)
 				{
 				DISTANCE(u->tgt_sp->x, u->tgt_sp->y, sp->x, sp->y, dist, a, b, c);
 
-				if (dist < 1200)
-                {
-                SpawnMineExp(SpriteNum);
-				SetSuicide(SpriteNum);
-				return(0);
-                }
+if (dist < 1200)
+{
+// Brett/GPT Edit:
+// Nuclear rabbits (hitag 1977) display a Monty Python warning when they detonate.
+//PutStringInfo(Player + myconnectindex,
+//    "That's just a harmless little bunny, isn't it?");
+//Above was experimental line to return to. Idea message re rabbit death
+
+    SpawnMineExp(SpriteNum);
+    SetSuicide(SpriteNum);
+    return(0);
+}
             }
         }
 
