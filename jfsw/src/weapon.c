@@ -7499,7 +7499,9 @@ DoDamage(short SpriteNum, short Weapon)
     case CALTROPS:
 
         ASSERT(SpriteNum >= 0 && Weapon >= 0);
-        damage = GetDamage(SpriteNum, Weapon, DMG_MINE_SHRAP);
+		// Brett/GPT Edit:
+		// Hellfire caltrops use Ripper Heart damage instead of weak shrapnel.
+		damage = GetDamage(SpriteNum, Weapon, WPN_HEART);
         if (u->sop_parent)
             {
             break;
@@ -7511,18 +7513,27 @@ DoDamage(short SpriteNum, short Weapon)
                 {
                 if (RANDOM_P2(1024<<4)>>4 < 800)
                     PlayerSound(DIGI_STEPONCALTROPS, &sp->x, &sp->y, &sp->z, v3df_follow|v3df_dontpan, u->PlayerP);
-                PlayerUpdateHealth(u->PlayerP, damage);
-                PlayerCheckDeath(u->PlayerP, Weapon);
+				PlayerUpdateHealth(u->PlayerP, damage);
+
+
+
+				PlayerCheckDeath(u->PlayerP, Weapon);
                 }
             }
         else
             {
-            ActorHealth(SpriteNum, damage);
-            ActorPain(SpriteNum);
-            ActorStdMissile(SpriteNum, Weapon);
-            ActorChooseDeath(SpriteNum, Weapon);
-            }
+		ActorHealth(SpriteNum, damage);
+		ActorPain(SpriteNum);
+		ActorStdMissile(SpriteNum, Weapon);
 
+
+
+		ActorChooseDeath(SpriteNum, Weapon);
+        }
+		// Brett/GPT Edit:
+		// Hellfire caltrops attach real fireball flames to whatever triggered them.
+		SpawnFireballFlames(Weapon, SpriteNum);
+		
         SetSuicide(Weapon);
         break;
 
