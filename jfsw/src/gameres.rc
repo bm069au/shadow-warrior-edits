@@ -30,6 +30,7 @@ FONT 8, "MS Shell Dlg", 0, 0, 1
     DEFPUSHBUTTON   "&Start", IDOK, 229, 198, 55, 15, 0, WS_EX_LEFT
     PUSHBUTTON      "&Cancel", IDCANCEL, 289, 198, 55, 15, 0, WS_EX_LEFT
     CONTROL         "", IDC_STARTWIN_TABCTL, WC_TABCONTROL, WS_TABSTOP | WS_CLIPSIBLINGS, 87, 7, 257, 180, WS_EX_LEFT | WS_EX_CONTROLPARENT
+    LTEXT           "If hidden, run sw.exe -setup to show this window again.", IDC_STATIC, 12, 190, 215, 8, SS_LEFT, WS_EX_LEFT
     AUTOCHECKBOX    "&Always show configuration on start", IDC_ALWAYSSHOW, 12, 202, 140, 8, WS_TABSTOP, WS_EX_LEFT
     CONTROL         IDB_BMP, IDC_STATIC, WC_STATIC, SS_BITMAP, 22, 7, 43, 39, WS_EX_LEFT
     CTEXT           "JFShadowWarrior", IDC_STARTWIN_APPTITLE, 12, 52, 65, 15, SS_CENTER, WS_EX_LEFT
