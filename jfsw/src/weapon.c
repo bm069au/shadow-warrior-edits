@@ -17663,47 +17663,51 @@ InitSpearTrap(short SpriteNum)
     PlaySound(DIGI_STAR, &sp->x, &sp->y, &sp->z, v3df_none);
     return (w);
     }
-
-// Brett Edit - Delayed nuke rabbit outbreak timer.
-// Original behavior: no delayed rabbit outbreak after nuclear explosion.
+#define BRETT_RABBIT_TIMER_CUTOFF_TICS (40 * 120)
+#define BRETT_NUKE_RABBITS_ENABLED 0
 int
 DoBrettNukeRabbitTimer(SHORT Weapon)
-    {
+{
     USERp u = User[Weapon];
-	short i;
-	short rabbit;
+    short i;
+    short rabbit;
 
-if (!u)
-    return(FALSE);
+    if (!u)
+        return(FALSE);
 
-if (gNet.TimeLimit && gNet.TimeLimitClock <= (60 * 120))
+    // Do not allow delayed rabbit timers near end of timed games.
+    if (gNet.TimeLimit && gNet.TimeLimitClock <= BRETT_RABBIT_TIMER_CUTOFF_TICS)
     {
-    KillSprite(Weapon);
-    return(FALSE);
+        KillSprite(Weapon);
+        return(FALSE);
     }
 
-u->WaitTics -= (MISSILEMOVETICS * 2);
+#if BRETT_NUKE_RABBITS_ENABLED
+    u->WaitTics -= (MISSILEMOVETICS * 2);
 
     if (u->WaitTics <= 0)
-        {
-		BRETT_MARK("RABT-001", "timer expired before rabbit hatch");
-
-		for (i = 0; i < 2; i++)
     {
-    rabbit = BunnyHatch2(Weapon);
-BRETT_MARK("RABT-001A", "after BunnyHatch2 returned");
-if (rabbit >= 0)
-    sprite[rabbit].hitag = 1977;
-    }
+        BRETT_MARK("RABT-001", "timer expired before rabbit hatch");
 
-BRETT_MARK("RABT-002", "after hatch before cleanup");
-KillSprite(Weapon);
-return(FALSE);
+        for (i = 0; i < 2; i++)
+        {
+            rabbit = BunnyHatch2(Weapon);
+            BRETT_MARK("RABT-001A", "after BunnyHatch2 returned");
+            if (rabbit >= 0)
+                sprite[rabbit].hitag = 1977;
         }
 
-    return(FALSE);
+        BRETT_MARK("RABT-002", "after hatch before cleanup");
+        KillSprite(Weapon);
+        return(FALSE);
     }
+#else
+    KillSprite(Weapon);
+    return(FALSE);
+#endif
 
+    return(FALSE);
+}
 int
 DoSuicide(short SpriteNum)
     {
