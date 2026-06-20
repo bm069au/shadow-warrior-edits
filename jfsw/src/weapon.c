@@ -6509,16 +6509,16 @@ DoDamage(short SpriteNum, short Weapon)
             ActorChooseDeath(SpriteNum, Weapon);
             }
 
-StarBlood(SpriteNum, Weapon);
+			StarBlood(SpriteNum, Weapon);
 
-// Brett/GPT Edit:
-// Hellfire shuriken / crossbolt effect.
-// Adds real fireball flames to whatever this projectile hits.
-SpawnFireballFlames(Weapon, SpriteNum);
+			// Brett/GPT Edit:
+			// Hellfire shuriken / crossbolt effect.
+			// Adds real fireball flames to whatever this projectile hits.
+			SpawnFireballFlames(Weapon, SpriteNum);
 
-wu->ID = 0;
-SetSuicide(Weapon);
-break;
+			wu->ID = 0;
+			SetSuicide(Weapon);
+			break;
 
     case SPEAR_R0:
         damage = GetDamage(SpriteNum, Weapon, DMG_SPEAR_TRAP);
