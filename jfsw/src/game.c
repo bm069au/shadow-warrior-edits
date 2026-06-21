@@ -5284,12 +5284,13 @@ getinput(SW_PACKET *loc)
                 SET_LOC_KEY(loc->bits, SK_AUTO_AIM, TRUE);
             }
         }
-    else
-    if (KEY_PRESSED(sc_Pause))
-        {
-        SET_LOC_KEY(loc->bits, SK_PAUSE, KEY_PRESSED(sc_Pause));
-        KEY_PRESSED(sc_Pause) = 0;
-        }
+	else
+	if (KEY_PRESSED(sc_Pause) || KEY_PRESSED(sc_P))
+	{
+	SET_LOC_KEY(loc->bits, SK_PAUSE, TRUE);
+	KEY_PRESSED(sc_Pause) = 0;
+	KEY_PRESSED(sc_P) = 0;
+	}
 
     SET_LOC_KEY(loc->bits, SK_CENTER_VIEW, BUTTON(gamefunc_Center_View));
 
