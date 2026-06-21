@@ -10979,6 +10979,9 @@ SpawnFireballFlames(SHORT SpriteNum, SHORT enemy)
             np = &sprite[eu->flame];
             nu = User[eu->flame];
 
+            // Brett/GPT: make refreshed flames inherit the current weapon owner
+            SetOwner(sp->owner, eu->flame);
+
             if (TEST(ep->extra, SPRX_BURNABLE))
                 return(eu->flame);
 
