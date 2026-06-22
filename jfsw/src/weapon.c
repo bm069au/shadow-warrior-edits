@@ -11349,6 +11349,9 @@ SpawnBunnyExp(SHORT Weapon)
     {
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
+    SPRITEp exp;
+    USERp eu;
+    short explosion;
 
     ASSERT(u);
 
@@ -11356,6 +11359,37 @@ SpawnBunnyExp(SHORT Weapon)
         return (-1);
 
     PlaySound(DIGI_BUNNYDIE3, &sp->x, &sp->y, &sp->z, v3df_none);
+
+    // Brett/GPT: rare toxic-fire rabbit event
+    if (RANDOM_RANGE(100) < 5)
+        {
+        explosion = SpawnSprite(STAT_MISSILE, BOLT_EXP, s_BoltExp, sp->sectnum,
+            sp->x, sp->y, sp->z, sp->ang, 0);
+        exp = &sprite[explosion];
+        eu = User[explosion];
+
+        exp->hitag = LUMINOUS;
+        SetOwner(sp->owner, explosion);
+        exp->shade = -40;
+        exp->xrepeat = 96;
+        exp->yrepeat = 96;
+        SET(exp->cstat, CSTAT_SPRITE_YCENTER);
+        RESET(exp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+
+        if (RANDOM_P2(1024) > 512)
+            SET(exp->cstat, CSTAT_SPRITE_XFLIP);
+
+        eu->Radius = DamageData[DMG_BOLT_EXP].radius * 2;
+
+        SpawnExpZadjust(Weapon, exp, Z(40), Z(40));
+        DoExpDamageTest(explosion);
+        SpawnFireballFlames(explosion, -1);
+        InitChemBomb(explosion);
+        SetExpQuake(explosion);
+        SpawnVis(-1, exp->sectnum, exp->x, exp->y, exp->z, 16);
+
+        return(explosion);
+        }
 
     u->ID = BOLT_EXP; // Change id
     InitBloodSpray(Weapon,TRUE,-1);
