@@ -11060,6 +11060,10 @@ SpawnFireballFlames(SHORT SpriteNum, SHORT enemy)
     if (enemy >= 0)
         {
         SetAttach(enemy, new);
+
+        // Brett/GPT: SetAttach may use ownership for attachment,
+        // so reassert combat ownership after attaching the flame.
+        SetOwner(sp->owner, new);
         }
     else
         {
