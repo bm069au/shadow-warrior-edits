@@ -4825,6 +4825,14 @@ DoFireballFlames(short SpriteNum)
     SPRITEp sp = &sprite[SpriteNum],ap;
     USERp u = User[SpriteNum];
     BOOL jumping = FALSE;
+    extern BOOL ExitLevel, FinishedLevel;
+
+    // Brett/GPT: prevent attached flame sprites from running during level exit cleanup
+    if (ExitLevel || FinishedLevel)
+        {
+        KillSprite(SpriteNum);
+        return(0);
+        }
 
     // if no owner then stay where you are
     if (u->Attach >= 0)
