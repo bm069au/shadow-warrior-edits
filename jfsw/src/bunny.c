@@ -1314,21 +1314,23 @@ int BunnyHatch2(short Weapon)
 int
 DoBunnyMove(short SpriteNum)
     {
-    SPRITEp sp = &sprite[SpriteNum];
-    USERp u = User[SpriteNum];
+	SPRITEp sp = &sprite[SpriteNum];
+	USERp u = User[SpriteNum];
+	USERp eu;
+	short explosion;
 	    // Brett Edit - Nuke-spawned rabbits act as silent proximity mines.
 		// Tagged in weapon.c by DoBrettNukeRabbitTimer using hitag 1977.
-		if (sp->hitag == 1977)
-			{
-			int dist, a, b, c;
+	if (sp->hitag == 1977)
+		{
+		int dist, a, b, c;
 
-			DoActorPickClosePlayer(SpriteNum);
+		DoActorPickClosePlayer(SpriteNum);
 
-			if (u->tgt_sp)
-				{
-				DISTANCE(u->tgt_sp->x, u->tgt_sp->y, sp->x, sp->y, dist, a, b, c);
+	if (u->tgt_sp)
+		{
+		DISTANCE(u->tgt_sp->x, u->tgt_sp->y, sp->x, sp->y, dist, a, b, c);
 
-if (dist < 1200)
+	if (dist < 1200)
 {
 // Brett/GPT Edit:
 // Nuclear rabbits (hitag 1977) display a Monty Python warning when they detonate.
@@ -1336,7 +1338,20 @@ if (dist < 1200)
 //    "That's just a harmless little bunny, isn't it?");
 //Above was experimental line to return to. Idea message re rabbit death
 
-    SpawnMineExp(SpriteNum);
+    explosion = SpawnMineExp(SpriteNum);
+
+	if (explosion >= 0)
+    {
+    eu = User[explosion];
+    if (eu)
+        eu->Radius *= 4;
+
+SpawnFireballFlames(explosion, -1);
+SpawnFireballFlames(explosion, -1);
+SpawnFireballFlames(explosion, -1);
+    InitChemBomb(explosion);
+    }
+
     SetSuicide(SpriteNum);
     return(0);
 }

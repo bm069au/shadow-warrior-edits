@@ -83,6 +83,28 @@ USER puser[MAX_SW_PLAYERS_REG];
 BOOL NightVision = FALSE;
 extern BOOL FinishedLevel;
 
+// Brett/GPT Debug:
+// Temporary crash marker helper for tracing multiplayer timer exit.
+static void BrettPlayerCrashMark(const char *code, const char *file, int line, const char *note)
+    {
+    FILE *fp;
+
+    fp = fopen("brett_crash_marker.txt", "w");
+    if (!fp)
+        return;
+
+    fprintf(fp, "BRETT CRASH MARKER\n");
+    fprintf(fp, "CODE: %s\n", code);
+    fprintf(fp, "FILE: %s\n", file);
+    fprintf(fp, "LINE: %d\n", line);
+    fprintf(fp, "FUNC: player.c\n");
+    fprintf(fp, "NOTE: %s\n", note);
+
+    fclose(fp);
+    }
+
+#define PLAYER_MARK(code, note) BrettPlayerCrashMark(code, __FILE__, __LINE__, note)
+
 //#define PLAYER_TURN_SCALE (8)
 #define PLAYER_TURN_SCALE (12)
 
@@ -7784,26 +7806,38 @@ VOID MultiPlayLimits(VOID)
     if (gNet.TimeLimit)
         {
         gNet.TimeLimitClock -= synctics;
-
+//Brett and GPT part of debugging exit probem. 
         if ((gNet.TimeLimitClock%120) <= 3)
             {
+            PLAYER_MARK("TEND-DISP1", "before PlayerUpdateTimeLimit");
             PlayerUpdateTimeLimit(Player + screenpeek);
+            PLAYER_MARK("TEND-DISP2", "after PlayerUpdateTimeLimit");
             }
 
         if (gNet.TimeLimitClock <= 0)
+            {
+            PLAYER_MARK("TEND-001", "TimeLimitClock <= 0, setting Done");
             Done = TRUE;
-        }
+            }
+		}
 
     if (Done)
         {
+        PLAYER_MARK("TEND-002", "Done entered, before TimeLimitClock reset");
         gNet.TimeLimitClock = gNet.TimeLimit;
+        PLAYER_MARK("TEND-003", "after TimeLimitClock reset");
 
         // do not increment if level is 23 thru 28
+        PLAYER_MARK("TEND-004", "before Level increment check");
         if (Level <= 22)
             Level++;
+        PLAYER_MARK("TEND-005", "after Level increment check");
 
+        PLAYER_MARK("TEND-006", "before ExitLevel TRUE");
         ExitLevel = TRUE;
+        PLAYER_MARK("TEND-007", "after ExitLevel TRUE before FinishedLevel TRUE");
         FinishedLevel = TRUE;
+        PLAYER_MARK("TEND-008", "after FinishedLevel TRUE");
         }
     }
 

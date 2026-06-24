@@ -9114,7 +9114,7 @@ extern STATE s_Phosphorus[];
 // Bretts edit weapon head after nuke. 
 extern STATE s_IconGuardHead[];
 
-//Wabbit prompt stuff - GPT forgets to commented
+//Wabbit prompt stuff - GPT forgets to comment
 int
 SpawnBrettNukeRabbitTimer(SHORT Weapon)
     {
@@ -9139,7 +9139,7 @@ SpawnBrettNukeRabbitTimer(SHORT Weapon)
 //Bretts edit Sec (??) is the time delay from nuke to wabbit birth
     if (tu)
         {
-        tu->WaitTics = SEC(45);
+        tu->WaitTics = SEC(53);
         tu->xchange = 0;
         tu->ychange = 0;
         tu->zchange = 0;
@@ -17718,7 +17718,7 @@ InitSpearTrap(short SpriteNum)
     return (w);
     }
 #define BRETT_RABBIT_TIMER_CUTOFF_TICS (40 * 120)
-#define BRETT_NUKE_RABBITS_ENABLED 0
+#define BRETT_NUKE_RABBITS_ENABLED 1
 int
 DoBrettNukeRabbitTimer(SHORT Weapon)
 {
