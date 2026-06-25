@@ -8016,9 +8016,20 @@ int DoExpDamageTest(short Weapon)
                     continue;
 
                 DoDamage(i, Weapon);
+
+                // Brett/GPT TEST:
+                // Nuclear explosion victims always get rabbit-style hellfire + gas.
+                // Once confirmed stable, change this to RANDOM_RANGE(100) < 10.
+                if (wu->Radius == NUKE_RADIUS)
+                    {
+                    SpawnFireballFlames(Weapon, i);
+                    InitChemBomb(Weapon);
+                    }
+
                 }
-            }
-        }
+				
+			}
+		}
 
     if(wu->ID == MUSHROOM_CLOUD) return(0); // Central Nuke doesn't break stuff
                                             // Only secondaries do that
@@ -17743,13 +17754,16 @@ DoBrettNukeRabbitTimer(SHORT Weapon)
     {
         BRETT_MARK("RABT-001", "timer expired before rabbit hatch");
 
-        for (i = 0; i < 2; i++)
+        if (RANDOM_RANGE(100) < 20)
+    {
+    for (i = 0; i < 2; i++)
         {
-            rabbit = BunnyHatch2(Weapon);
-            BRETT_MARK("RABT-001A", "after BunnyHatch2 returned");
-            if (rabbit >= 0)
-                sprite[rabbit].hitag = 1977;
+        rabbit = BunnyHatch2(Weapon);
+        BRETT_MARK("RABT-001A", "after BunnyHatch2 returned");
+        if (rabbit >= 0)
+            sprite[rabbit].hitag = 1977;
         }
+    }
 
         BRETT_MARK("RABT-002", "after hatch before cleanup");
         KillSprite(Weapon);

@@ -33,9 +33,9 @@ FONT 8, "MS Shell Dlg", 0, 0, 1
     LTEXT           "If hidden, run sw.exe -setup to show this window again.", IDC_STATIC, 12, 190, 215, 8, SS_LEFT, WS_EX_LEFT
     AUTOCHECKBOX    "&Always show configuration on start", IDC_ALWAYSSHOW, 12, 202, 140, 8, WS_TABSTOP, WS_EX_LEFT
     CONTROL         IDB_BMP, IDC_STATIC, WC_STATIC, SS_BITMAP, 22, 7, 43, 39, WS_EX_LEFT
-    CTEXT           "JFShadowWarrior", IDC_STARTWIN_APPTITLE, 12, 52, 65, 15, SS_CENTER, WS_EX_LEFT
-    LTEXT           "Version xxxxxxx\nDate", IDC_STARTWIN_APPVERSION, 12, 150, 65, 18, 0, WS_EX_LEFT
-    CONTROL         "<A HREF=""http://www.jonof.id.au/jfsw"">Website</A>", IDC_STARTWIN_APPLINK, WC_LINK, WS_TABSTOP, 12, 175, 65, 15, WS_EX_LEFT
+    CTEXT           "Brett and Darrin Version.", IDC_STARTWIN_APPTITLE, 12, 52, 65, 15, SS_CENTER, WS_EX_LEFT
+	LTEXT           "Version xxxxxxx\nDate", IDC_STARTWIN_APPVERSION, 12, 80, 75, 18, 0, WS_EX_LEFT
+	CTEXT           "Nuke nades\nStickybombs anywhere\nPost-nuke gas rabbits\nDeath rabbits\nRare weapon drops", IDC_STATIC, 4, 105, 88, 70, SS_CENTER, WS_EX_LEFT
 }
 
 

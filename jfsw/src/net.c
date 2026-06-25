@@ -532,11 +532,13 @@ Connect(VOID)
 
 int wfe_Clock;
 BOOL (*wfe_ExitCallback)(VOID);
-
+// controls the timeout so no more hangs on slave exit. 
 void
 waitforeverybody(void)
-    {
-    int i, size = 1;
+	{
+	int i, size = 1;
+	int wait_start_clock;
+	const int wait_timeout_tics = 120 * 30;
 
     if (!CommEnabled)
         return;
@@ -560,7 +562,8 @@ waitforeverybody(void)
     #endif
 
     //KEY_PRESSED(KEYSC_ESC) = FALSE;
-    Player[myconnectindex].playerreadyflag++;
+	Player[myconnectindex].playerreadyflag++;
+	wait_start_clock = totalclock;
 
     while (TRUE)
         {
@@ -574,8 +577,15 @@ waitforeverybody(void)
             }
 
 		handleevents();
-        getpackets();
+		getpackets();
 
+
+        if (totalclock - wait_start_clock >= wait_timeout_tics)
+            {
+            buildputs("waitforeverybody timed out; continuing.\n");
+            return;
+            }
+			
         if (quitevent || (wfe_ExitCallback && wfe_ExitCallback()))
             {
             // allow exit

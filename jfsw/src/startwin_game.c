@@ -667,8 +667,8 @@ static INT_PTR CALLBACK startup_dlgproc(HWND hwndDlg, UINT uMsg, WPARAM wParam, 
                 TCHAR verstr[64];
 
                 hwnd = GetDlgItem(hwndDlg, IDC_STARTWIN_APPVERSION);
-                StringCbPrintf(verstr, sizeof(verstr), TEXT("Version %s\n%s"),
-                    game_version, game_date);
+					StringCbPrintf(verstr, sizeof(verstr), TEXT("%s\n%s"),
+						game_version, game_date);
                 SetWindowText(hwnd, verstr);
 
                 hwnd = GetDlgItem(hwndDlg, IDC_STARTWIN_TABCTL);

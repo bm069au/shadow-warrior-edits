@@ -3457,12 +3457,16 @@ int app_main(int argc, char const * const argv[])
     );
     SetupOSDCommands();
 
-    wm_setapptitle("JFShadowWarrior");
-    buildprintf("\nJFShadowWarrior\n"
-        "Based on Shadow Warrior by 3D Realms Entertainment.\n"
-        "Additional improvements by Jonathon Fowler (http://www.jonof.id.au) and other contributors.\n"
-        "See GPL.TXT for license terms.\n\n"
-        "Version %s.\nBuilt %s %s.\n", game_version, game_date, game_time);
+	wm_setapptitle("Brett Version");
+	buildprintf("\nBrett Version\n"
+		"Based on Shadow Warrior by 3D Realms Entertainment.\n"
+		"Brett Build Features:\n"
+		" - Nuke nades\n"
+		" - Stickybombs anywhere\n"
+		" - Spicy gaseous post-nuke rabbits\n"
+		" - Harmless death rabbits\n"
+		" - Rare weapon drops\n"
+		"Version %s.\nBuilt %s %s.\n", game_version, game_date, game_time);
 
     for (i=1;i<argc;i++) {
         char const *arg = argv[i];
