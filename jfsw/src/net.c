@@ -580,11 +580,14 @@ waitforeverybody(void)
 		getpackets();
 
 
-        if (totalclock - wait_start_clock >= wait_timeout_tics)
-            {
-            buildputs("waitforeverybody timed out; continuing.\n");
-            return;
-            }
+if (totalclock - wait_start_clock >= wait_timeout_tics)
+{
+    buildprintf("WFE timeout: start=%d current=%d elapsed=%d\n",
+        wait_start_clock, totalclock, totalclock - wait_start_clock);
+
+    buildputs("waitforeverybody timed out; continuing.\n");
+    return;
+}
 			
         if (quitevent || (wfe_ExitCallback && wfe_ExitCallback()))
             {

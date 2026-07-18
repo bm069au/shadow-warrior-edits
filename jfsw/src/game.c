@@ -3128,12 +3128,22 @@ RunLevel(VOID)
         handleevents();
         OSD_DispatchQueued();
 
-        if (quitevent)
+ if (quitevent)
             {
             if (CommPlayers >= 2)
                 MultiPlayQuitFlag = TRUE;
             else
                 QuitFlag = TRUE;
+            }
+
+        if (CommEnabled && MultiPlayQuitFlag)
+            {
+            BYTE pbuf[1];
+
+            QuitFlag = TRUE;
+            pbuf[0] = PACKET_TYPE_MENU_LEVEL_QUIT;
+            netbroadcastpacket(pbuf, 1);
+            break;
             }
 
           //MONO_PRINT("Before MoveLoop");

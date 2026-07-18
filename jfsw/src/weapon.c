@@ -138,8 +138,8 @@ short target_ang;
 ANIMATOR NullAnimator;
 ANIMATOR DoStar;
 ANIMATOR DoCrossBolt;
-// Brett Edit - Added animator for delayed nuke rabbit timer.
-ANIMATOR DoSuicide, DoUziSmoke, DoBrettNukeRabbitTimer;
+// Brett Edit - Animator for the single delayed nuke reward timer.
+ANIMATOR DoSuicide, DoUziSmoke, DoBrettNukeRewardTimer;
 ANIMATOR DoShrapJumpFall;
 ANIMATOR DoFastShrapJumpFall;
 
@@ -207,11 +207,11 @@ STATE s_Suicide[] =
     {
     {1, 100, DoSuicide, &s_Suicide[0]}
     };
-	// Brett Edit - State for delayed nuke rabbit outbreak timer.
-	// Original behavior: no delayed post-nuke rabbit timer actor.
-STATE s_BrettNukeRabbitTimer[] =
+// Brett Edit - Single delayed nuke reward timer.
+// Spawns the post-nuke rabbits and rare weapon head together.
+STATE s_BrettNukeRewardTimer[] =
     {
-    {BLANK, 10, DoBrettNukeRabbitTimer, &s_BrettNukeRabbitTimer[0]}
+    {BLANK, 10, DoBrettNukeRewardTimer, &s_BrettNukeRewardTimer[0]}
     };
 
 STATE s_DeadLoWang[] =
@@ -9125,15 +9125,15 @@ extern STATE s_Phosphorus[];
 // Bretts edit weapon head after nuke. 
 extern STATE s_IconGuardHead[];
 
-//Wabbit prompt stuff - GPT forgets to comment
+// Creates the single delayed nuke reward timer.
 int
-SpawnBrettNukeRabbitTimer(SHORT Weapon)
+SpawnBrettNukeRewardTimer(SHORT Weapon)
     {
     SPRITEp sp = &sprite[Weapon];
     short timer;
     USERp tu;
 
-    timer = SpawnSprite(STAT_MISSILE, BLANK, s_BrettNukeRabbitTimer,
+    timer = SpawnSprite(STAT_MISSILE, BLANK, s_BrettNukeRewardTimer,
         sp->sectnum, sp->x, sp->y, sp->z, sp->ang, 0);
 
     if (timer < 0)
@@ -9147,18 +9147,25 @@ SpawnBrettNukeRabbitTimer(SHORT Weapon)
     sprite[timer].yrepeat = 0;
     SET(sprite[timer].cstat, CSTAT_SPRITE_INVISIBLE);
     RESET(sprite[timer].cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
-//Bretts edit Sec (??) is the time delay from nuke to wabbit birth
+// Single delayed nuke reward timer; 53 seconds allows timing buffer.
     if (tu)
         {
-        tu->WaitTics = SEC(53);
+        tu->WaitTics = SEC(53); // synced game timer
         tu->xchange = 0;
         tu->ychange = 0;
         tu->zchange = 0;
+        tu->Radius = 0;
+        }
+    else
+        {
+        KillSprite(timer);
+        return(-1);
         }
 
     return(timer);
     }
-	
+
+
 int
 DoGrenade(SHORT Weapon)
     {
@@ -11198,38 +11205,7 @@ SpawnBreakStaticFlames(SHORT SpriteNum)
 
     return(new);
     }
-// Brett's static fire sprite for 40 sec spawn point below, before next INT
-int
-SpawnBrettNukeRabbitFlameTimer(SHORT SpriteNum)
-    {
-    SPRITEp sp = &sprite[SpriteNum];
-    SPRITEp np;
-    USERp nu;
-    short new;
 
-    new = SpawnSprite(STAT_MISSILE, FIREBALL_FLAMES, s_BrettNukeRabbitTimer, sp->sectnum,
-        sp->x, sp->y, sp->z, sp->ang, 0);
-
-    np = &sprite[new];
-    nu = User[new];
-
-    np->picnum = 3143;
-    np->hitag = LUMINOUS;
-
-    np->xrepeat = 24;
-    np->yrepeat = 24;
-
-    np->shade = -40;
-    RESET(np->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
-
-    nu->Radius = 200;
-    nu->WaitTics = SEC(40);
-    nu->floor_dist = nu->ceiling_dist = 0;
-
-    np->z = getflorzofslope(np->sectnum,np->x,np->y);
-
-    return(new);
-    }
 
 int
 SpawnFireballExp(SHORT Weapon)
@@ -11593,65 +11569,12 @@ BRETT_MARK("NUK-003", "before mushroom cloud spawn");
     ang = ang + 512 + RANDOM_P2(256);
     SpawnNuclearSecondaryExp(explosion, ang);
 BRETT_MARK("NUK-004", "before custom nuke extras");
-SpawnBrettNukeRabbitTimer(explosion);
-// Brett Edit - Rare guard head drop after nuclear explosion.
-// Original behavior: no item spawn after nuke.
-if (RANDOM_P2(1024) < 80)
-    // Brett Edit - hash out above and enable below line to get 100% head spawn.
-    // if (1)
-    {
-    short head;
+SpawnBrettNukeRewardTimer(explosion);
 
-    head = SpawnSprite(STAT_ITEM, ICON_GUARD_HEAD, s_IconGuardHead,
-        sprite[explosion].sectnum,
-        sprite[explosion].x,
-        sprite[explosion].y,
-        sprite[explosion].z,
-        sprite[explosion].ang,
-        0);
-
-    // Do NOT use SetSuicide(head); it caused crash suspicion.
-    if (head >= 0)
-    {
-    SET(User[head]->Flags2, SPR2_NEVER_RESPAWN);
-    IconDefault(head);
-    sprite[head].xrepeat = 64;
-    sprite[head].yrepeat = 64;
-    }
-    }
-
-// Brett Edit - Rare railgun drop after nuclear explosion.
-// Lower chance than guardian head so nuke loot stays special, not guaranteed.
-	      if (0) // moved railgun drop to player death
-    {
-    extern STATE s_IconRailGun[];
-    short railgun;
-
-    railgun = SpawnSprite(STAT_ITEM, ICON_RAIL_GUN, s_IconRailGun,
-        sprite[explosion].sectnum,
-        sprite[explosion].x,
-        sprite[explosion].y,
-        sprite[explosion].z,
-        sprite[explosion].ang,
-        0);
-
-    if (railgun >= 0)
-        {
-        SET(User[railgun]->Flags2, SPR2_NEVER_RESPAWN);
-        IconDefault(railgun);
-        sprite[railgun].xrepeat = 64;
-        sprite[railgun].yrepeat = 64;
-        }
-    }
-// Brett Edit - Delayed rabbit outbreak after nuclear explosion.
-// Disabled duplicate timer call - timer is already spawned above near NUK-004.
-// SpawnBrettNukeRabbitTimer(explosion);
 
 BRETT_MARK("NUK-005", "SpawnNuclearExp before return");
 return(explosion);
 }
-
-
 
 int
 SpawnTracerExp(SHORT Weapon)
@@ -17728,51 +17651,61 @@ InitSpearTrap(short SpriteNum)
     PlaySound(DIGI_STAR, &sp->x, &sp->y, &sp->z, v3df_none);
     return (w);
     }
-#define BRETT_RABBIT_TIMER_CUTOFF_TICS (40 * 120)
-#define BRETT_NUKE_RABBITS_ENABLED 1
+#define BRETT_NUKE_REWARD_TIMER_CUTOFF_TICS (60 * 120)
+
 int
-DoBrettNukeRabbitTimer(SHORT Weapon)
+DoBrettNukeRewardTimer(SHORT Weapon)
 {
     USERp u = User[Weapon];
     short i;
     short rabbit;
+	short head;
 
     if (!u)
         return(FALSE);
 
-    // Do not allow delayed rabbit timers near end of timed games.
-    if (gNet.TimeLimit && gNet.TimeLimitClock <= BRETT_RABBIT_TIMER_CUTOFF_TICS)
+	// Do not allow delayed nuke rewards near the end of timed games.
+    if (gNet.TimeLimit && gNet.TimeLimitClock <= BRETT_NUKE_REWARD_TIMER_CUTOFF_TICS)
     {
         KillSprite(Weapon);
         return(FALSE);
     }
 
-#if BRETT_NUKE_RABBITS_ENABLED
     u->WaitTics -= (MISSILEMOVETICS * 2);
 
     if (u->WaitTics <= 0)
     {
-        BRETT_MARK("RABT-001", "timer expired before rabbit hatch");
+	BRETT_MARK("NREW-001", "nuke reward timer expired");
 
-        if (RANDOM_RANGE(100) < 20)
-    {
     for (i = 0; i < 2; i++)
         {
         rabbit = BunnyHatch2(Weapon);
-        BRETT_MARK("RABT-001A", "after BunnyHatch2 returned");
+        BRETT_MARK("NREW-001A", "nuke reward rabbit spawned");
         if (rabbit >= 0)
             sprite[rabbit].hitag = 1977;
         }
-    }
+        if (RANDOM_P2(1024) < 80)
+            {
+            head = SpawnSprite(STAT_ITEM, ICON_GUARD_HEAD, s_IconGuardHead,
+                sprite[Weapon].sectnum,
+                sprite[Weapon].x,
+                sprite[Weapon].y,
+                sprite[Weapon].z,
+                sprite[Weapon].ang,
+                0);
 
-        BRETT_MARK("RABT-002", "after hatch before cleanup");
+            if (head >= 0 && User[head])
+                {
+                SET(User[head]->Flags2, SPR2_NEVER_RESPAWN);
+                IconDefault(head);
+                sprite[head].xrepeat = 64;
+                sprite[head].yrepeat = 64;
+                }
+            }
+        BRETT_MARK("NREW-002", "nuke rewards complete before cleanup");
         KillSprite(Weapon);
         return(FALSE);
     }
-#else
-    KillSprite(Weapon);
-    return(FALSE);
-#endif
 
     return(FALSE);
 }
