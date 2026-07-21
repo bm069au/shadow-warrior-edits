@@ -9114,6 +9114,10 @@ extern STATE s_Phosphorus[];
 // Bretts edit weapon head after nuke. 
 extern STATE s_IconGuardHead[];
 
+// Shared rare-drop roll for the post-nuke guard head and rabbit outbreak
+// (80 / 1024 = 7.8%).
+#define BRETT_NUKE_RARE_DROP_CHANCE 80
+
 //Wabbit prompt stuff - GPT forgets to commented
 int
 SpawnBrettNukeRabbitTimer(SHORT Weapon)
@@ -11582,10 +11586,9 @@ BRETT_MARK("NUK-003", "before mushroom cloud spawn");
     ang = ang + 512 + RANDOM_P2(256);
     SpawnNuclearSecondaryExp(explosion, ang);
 BRETT_MARK("NUK-004", "before custom nuke extras");
-SpawnBrettNukeRabbitTimer(explosion);
-// Brett Edit - Rare guard head drop after nuclear explosion.
+// Brett Edit - Rare guard head and delayed rabbit drop after nuclear explosion.
 // Original behavior: no item spawn after nuke.
-if (RANDOM_P2(1024) < 80)
+if (RANDOM_P2(1024) < BRETT_NUKE_RARE_DROP_CHANCE)
     // Brett Edit - hash out above and enable below line to get 100% head spawn.
     // if (1)
     {
@@ -11606,6 +11609,10 @@ if (RANDOM_P2(1024) < 80)
     IconDefault(head);
     sprite[head].xrepeat = 64;
     sprite[head].yrepeat = 64;
+
+    // Grafted onto the same rare roll as the guard head. The proven timer
+    // still waits 45 seconds before hatching two exploding rabbits.
+    SpawnBrettNukeRabbitTimer(explosion);
     }
     }
 
@@ -11632,10 +11639,6 @@ if (RANDOM_P2(1024) < 80)
         sprite[railgun].yrepeat = 64;
         }
     }
-// Brett Edit - Delayed rabbit outbreak after nuclear explosion.
-// Disabled duplicate timer call - timer is already spawned above near NUK-004.
-// SpawnBrettNukeRabbitTimer(explosion);
-
 BRETT_MARK("NUK-005", "SpawnNuclearExp before return");
 return(explosion);
 }
@@ -17718,7 +17721,6 @@ InitSpearTrap(short SpriteNum)
     return (w);
     }
 #define BRETT_RABBIT_TIMER_CUTOFF_TICS (40 * 120)
-#define BRETT_NUKE_RABBITS_ENABLED 0
 int
 DoBrettNukeRabbitTimer(SHORT Weapon)
 {
@@ -17736,7 +17738,6 @@ DoBrettNukeRabbitTimer(SHORT Weapon)
         return(FALSE);
     }
 
-#if BRETT_NUKE_RABBITS_ENABLED
     u->WaitTics -= (MISSILEMOVETICS * 2);
 
     if (u->WaitTics <= 0)
@@ -17755,11 +17756,6 @@ DoBrettNukeRabbitTimer(SHORT Weapon)
         KillSprite(Weapon);
         return(FALSE);
     }
-#else
-    KillSprite(Weapon);
-    return(FALSE);
-#endif
-
     return(FALSE);
 }
 int
