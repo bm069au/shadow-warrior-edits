@@ -139,7 +139,7 @@ ANIMATOR NullAnimator;
 ANIMATOR DoStar;
 ANIMATOR DoCrossBolt;
 // Brett Edit - Animator for the single delayed nuke reward timer.
-ANIMATOR DoSuicide, DoUziSmoke, DoBrettNukeRewardTimer;
+ANIMATOR DoSuicide, DoUziSmoke;
 ANIMATOR DoShrapJumpFall;
 ANIMATOR DoFastShrapJumpFall;
 
@@ -207,12 +207,7 @@ STATE s_Suicide[] =
     {
     {1, 100, DoSuicide, &s_Suicide[0]}
     };
-// Brett Edit - Single delayed nuke reward timer.
-// Spawns the post-nuke rabbits and rare weapon head together.
-STATE s_BrettNukeRewardTimer[] =
-    {
-    {BLANK, 10, DoBrettNukeRewardTimer, &s_BrettNukeRewardTimer[0]}
-    };
+
 
 STATE s_DeadLoWang[] =
     {
@@ -5825,14 +5820,10 @@ PlayerCheckDeath(PLAYERp pp, short Weapon)
     if (u->Health <= 0 && !TEST(pp->Flags, PF_DEAD))
         {
         VOID DoPlayerBeginDie(PLAYERp);
-		short i;
-
-		// Brett edit:
-		// Spawn 2 rabbits when player dies.
-		for (i = 0; i < 2; i++)
-		{
-    BunnyHatch2(pp->PlayerSprite);
-		}
+// Spawn one normal rabbit when the player dies.
+BunnyHatch2(pp->PlayerSprite);
+if (RANDOM_RANGE(100) < 5)
+    BunnyHatchBoss(pp->PlayerSprite);
 
 // Brett edit:
 // Rare railgun drop when player dies.
@@ -8017,14 +8008,6 @@ int DoExpDamageTest(short Weapon)
 
                 DoDamage(i, Weapon);
 
-                // Brett/GPT TEST:
-                // Nuclear explosion victims always get rabbit-style hellfire + gas.
-                // Once confirmed stable, change this to RANDOM_RANGE(100) < 10.
-                if (wu->Radius == NUKE_RADIUS)
-                    {
-                    SpawnFireballFlames(Weapon, i);
-                    InitChemBomb(Weapon);
-                    }
 
                 }
 				
@@ -9124,46 +9107,6 @@ BOOL SlopeBounce(short SpriteNum, BOOL *hitwall)
 extern STATE s_Phosphorus[];
 // Bretts edit weapon head after nuke. 
 extern STATE s_IconGuardHead[];
-
-// Creates the single delayed nuke reward timer.
-int
-SpawnBrettNukeRewardTimer(SHORT Weapon)
-    {
-    SPRITEp sp = &sprite[Weapon];
-    short timer;
-    USERp tu;
-
-    timer = SpawnSprite(STAT_MISSILE, BLANK, s_BrettNukeRewardTimer,
-        sp->sectnum, sp->x, sp->y, sp->z, sp->ang, 0);
-
-    if (timer < 0)
-        return(-1);
-
-    tu = User[timer];
-
-    SetOwner(sp->owner, timer);
-
-    sprite[timer].xrepeat = 0;
-    sprite[timer].yrepeat = 0;
-    SET(sprite[timer].cstat, CSTAT_SPRITE_INVISIBLE);
-    RESET(sprite[timer].cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
-// Single delayed nuke reward timer; 53 seconds allows timing buffer.
-    if (tu)
-        {
-        tu->WaitTics = SEC(53); // synced game timer
-        tu->xchange = 0;
-        tu->ychange = 0;
-        tu->zchange = 0;
-        tu->Radius = 0;
-        }
-    else
-        {
-        KillSprite(timer);
-        return(-1);
-        }
-
-    return(timer);
-    }
 
 
 int
@@ -11336,9 +11279,6 @@ SpawnBunnyExp(SHORT Weapon)
     {
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
-    SPRITEp exp;
-    USERp eu;
-    short explosion;
 
     ASSERT(u);
 
@@ -11347,36 +11287,7 @@ SpawnBunnyExp(SHORT Weapon)
 
     PlaySound(DIGI_BUNNYDIE3, &sp->x, &sp->y, &sp->z, v3df_none);
 
-    // Brett/GPT: rare toxic-fire rabbit event
-    if (RANDOM_RANGE(100) < 5)
-        {
-        explosion = SpawnSprite(STAT_MISSILE, BOLT_EXP, s_BoltExp, sp->sectnum,
-            sp->x, sp->y, sp->z, sp->ang, 0);
-        exp = &sprite[explosion];
-        eu = User[explosion];
 
-        exp->hitag = LUMINOUS;
-        SetOwner(sp->owner, explosion);
-        exp->shade = -40;
-        exp->xrepeat = 96;
-        exp->yrepeat = 96;
-        SET(exp->cstat, CSTAT_SPRITE_YCENTER);
-        RESET(exp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
-
-        if (RANDOM_P2(1024) > 512)
-            SET(exp->cstat, CSTAT_SPRITE_XFLIP);
-
-        eu->Radius = DamageData[DMG_BOLT_EXP].radius * 2;
-
-        SpawnExpZadjust(Weapon, exp, Z(40), Z(40));
-        DoExpDamageTest(explosion);
-        SpawnFireballFlames(explosion, -1);
-        InitChemBomb(explosion);
-        SetExpQuake(explosion);
-        SpawnVis(-1, exp->sectnum, exp->x, exp->y, exp->z, 16);
-
-        return(explosion);
-        }
 
     u->ID = BOLT_EXP; // Change id
     InitBloodSpray(Weapon,TRUE,-1);
@@ -11569,7 +11480,27 @@ BRETT_MARK("NUK-003", "before mushroom cloud spawn");
     ang = ang + 512 + RANDOM_P2(256);
     SpawnNuclearSecondaryExp(explosion, ang);
 BRETT_MARK("NUK-004", "before custom nuke extras");
-SpawnBrettNukeRewardTimer(explosion);
+// Rare guardian-head weapon drop immediately after the nuke.
+if (RANDOM_P2(1024) < 80)
+    {
+    short head;
+
+    head = SpawnSprite(STAT_ITEM, ICON_GUARD_HEAD, s_IconGuardHead,
+        sprite[explosion].sectnum,
+        sprite[explosion].x,
+        sprite[explosion].y,
+        sprite[explosion].z,
+        sprite[explosion].ang,
+        0);
+
+    if (head >= 0 && User[head])
+        {
+        SET(User[head]->Flags2, SPR2_NEVER_RESPAWN);
+        IconDefault(head);
+        sprite[head].xrepeat = 64;
+        sprite[head].yrepeat = 64;
+        }
+    }
 
 
 BRETT_MARK("NUK-005", "SpawnNuclearExp before return");
@@ -15835,7 +15766,7 @@ InitBunnyRocket(PLAYERp pp)
     // Inserting and setting up variables
     //nz = pp->posz + pp->bob_z + Z(12);
     nz = pp->posz + pp->bob_z + Z(8);
-    w = SpawnSprite(STAT_MISSILE, BOLT_THINMAN_R0, &s_Rocket[0][0], pp->cursectnum,
+w = SpawnSprite(STAT_MISSILE, BOLT_THINMAN_R0, &s_Rocket[0][0], pp->cursectnum,
         nx, ny, nz, pp->pang, ROCKET_VELOCITY);
 
     wp = &sprite[w];
@@ -15843,15 +15774,15 @@ InitBunnyRocket(PLAYERp pp)
 
     //wp->owner = pp->PlayerSprite;
     SetOwner(pp->PlayerSprite, w);
-    wp->yrepeat = 160;
-    wp->xrepeat = 160;
+    wp->yrepeat = 128;
+    wp->xrepeat = 128;
     wp->shade = -15;
     zvel = ((100 - pp->horiz) * (HORIZ_MULT+35));
 
     wp->clipdist = 64L>>2;
 
     wu->RotNum = 5;
-    NewStateGroup(w, &sg_Rocket[0]);
+NewStateGroup(w, &sg_Rocket[0]);
 
     wu->WeaponNum = u->WeaponNum;
     wu->Radius = 2000;
@@ -17651,64 +17582,7 @@ InitSpearTrap(short SpriteNum)
     PlaySound(DIGI_STAR, &sp->x, &sp->y, &sp->z, v3df_none);
     return (w);
     }
-#define BRETT_NUKE_REWARD_TIMER_CUTOFF_TICS (60 * 120)
 
-int
-DoBrettNukeRewardTimer(SHORT Weapon)
-{
-    USERp u = User[Weapon];
-    short i;
-    short rabbit;
-	short head;
-
-    if (!u)
-        return(FALSE);
-
-	// Do not allow delayed nuke rewards near the end of timed games.
-    if (gNet.TimeLimit && gNet.TimeLimitClock <= BRETT_NUKE_REWARD_TIMER_CUTOFF_TICS)
-    {
-        KillSprite(Weapon);
-        return(FALSE);
-    }
-
-    u->WaitTics -= (MISSILEMOVETICS * 2);
-
-    if (u->WaitTics <= 0)
-    {
-	BRETT_MARK("NREW-001", "nuke reward timer expired");
-
-    for (i = 0; i < 2; i++)
-        {
-        rabbit = BunnyHatch2(Weapon);
-        BRETT_MARK("NREW-001A", "nuke reward rabbit spawned");
-        if (rabbit >= 0)
-            sprite[rabbit].hitag = 1977;
-        }
-        if (RANDOM_P2(1024) < 80)
-            {
-            head = SpawnSprite(STAT_ITEM, ICON_GUARD_HEAD, s_IconGuardHead,
-                sprite[Weapon].sectnum,
-                sprite[Weapon].x,
-                sprite[Weapon].y,
-                sprite[Weapon].z,
-                sprite[Weapon].ang,
-                0);
-
-            if (head >= 0 && User[head])
-                {
-                SET(User[head]->Flags2, SPR2_NEVER_RESPAWN);
-                IconDefault(head);
-                sprite[head].xrepeat = 64;
-                sprite[head].yrepeat = 64;
-                }
-            }
-        BRETT_MARK("NREW-002", "nuke rewards complete before cleanup");
-        KillSprite(Weapon);
-        return(FALSE);
-    }
-
-    return(FALSE);
-}
 int
 DoSuicide(short SpriteNum)
     {

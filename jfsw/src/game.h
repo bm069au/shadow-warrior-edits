@@ -2350,6 +2350,7 @@ int PickJumpMaxSpeed(short SpriteNum, short max_speed);	// ripper.c
 int DoRipperRipHeart(short SpriteNum);	// ripper.c
 int DoRipper2RipHeart(short SpriteNum);	// ripper2.c
 int BunnyHatch2(short Weapon);	// bunny.c
+int BunnyHatchBoss(short Weapon);	// bunny.c
 int DoSkullBeginDeath(SHORT SpriteNum);	// skull.c
 
 void MapSetAll2D(BYTE fill);	// game.c

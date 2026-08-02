@@ -41,7 +41,7 @@ short Bunny_Count = 0;
 ANIMATOR DoActorMoveJump;
 ANIMATOR DoBunnyMoveJump;
 ANIMATOR DoBunnyQuickJump;
-int InitSpriteChemBomb(SHORT SpriteNum);
+
 
 DECISION BunnyBattle[] =
     {
@@ -1241,7 +1241,7 @@ void BunnyHatch(short Weapon)
         }
     }
 
-int BunnyHatch2(short Weapon)
+static int BunnyHatchType(short Weapon, BOOL Boss)
     {
     SPRITEp wp = &sprite[Weapon];
 
@@ -1250,6 +1250,10 @@ int BunnyHatch2(short Weapon)
     USERp nu;
 
     new = COVERinsertsprite(wp->sectnum, STAT_DEFAULT);
+	
+	if (new < 0)
+    return(-1);
+
     np = &sprite[new];
     memset(np,0,sizeof(SPRITE));
     np->sectnum = wp->sectnum;
@@ -1261,14 +1265,18 @@ int BunnyHatch2(short Weapon)
     np->xrepeat = 30;  // Baby size
     np->yrepeat = 24;
     np->ang = RANDOM_P2(2048);
-    np->pal = 0;
+    np->pal = Boss ? PALETTE_PLAYER1 : 0;
     SetupBunny(new);
     nu = User[new];
     np->shade = wp->shade;
 
     // make immediately active
     SET(nu->Flags, SPR_ACTIVE);
-    if(RANDOM_RANGE(1000) > 500) // Boy or Girl?
+if (Boss)
+    {
+    nu->spal = np->pal = PALETTE_PLAYER1;
+    }
+else if (RANDOM_RANGE(1000) > 500) // Boy or Girl?
         {
         nu->spal = np->pal = PALETTE_PLAYER0; // Girl
         nu->Flag1 = SEC(5);
@@ -1284,7 +1292,7 @@ int BunnyHatch2(short Weapon)
     NewStateGroup(new, nu->ActorActionSet->Jump);
     nu->ActorActionFunc = DoActorMoveJump;
     DoActorSetSpeed(new, FAST_SPEED);
-    if (TEST_BOOL3(wp))
+if (!Boss && TEST_BOOL3(wp))
         {
         PickJumpMaxSpeed(new, -600-RANDOM_RANGE(600));
         np->xrepeat = np->yrepeat = 64;
@@ -1311,56 +1319,23 @@ int BunnyHatch2(short Weapon)
 
     return(new);
     }
-
+int BunnyHatch2(short Weapon)
+    {
+    return BunnyHatchType(Weapon, FALSE);
+    }
+	
+	int BunnyHatchBoss(short Weapon)
+    {
+    return BunnyHatchType(Weapon, TRUE);
+    }
+	
 int
 DoBunnyMove(short SpriteNum)
     {
 	SPRITEp sp = &sprite[SpriteNum];
 	USERp u = User[SpriteNum];
-	USERp eu;
-	short explosion, target;
-	    // Brett Edit - Nuke-spawned rabbits act as silent proximity mines.
-		// Tagged in weapon.c by DoBrettNukeRabbitTimer using hitag 1977.
-	if (sp->hitag == 1977)
-		{
-		int dist, a, b, c;
 
-		DoActorPickClosePlayer(SpriteNum);
 
-	if (u->tgt_sp)
-		{
-		DISTANCE(u->tgt_sp->x, u->tgt_sp->y, sp->x, sp->y, dist, a, b, c);
-
-	if (dist < 1200)
-{
-// Brett/GPT Edit:
-// Nuclear rabbits (hitag 1977) display a Monty Python warning when they detonate.
-//PutStringInfo(Player + myconnectindex,
-//    "That's just a harmless little bunny, isn't it?");
-//Above was experimental line to return to. Idea message re rabbit death
-
-target = (short)(u->tgt_sp - sprite);
-
-explosion = SpawnMineExp(SpriteNum);
-
-	if (explosion >= 0)
-    {
-    eu = User[explosion];
-if (eu)
-    {
-    eu->Radius *= 4;
-
-    }
-
-    SpawnFireballFlames(explosion, target);
-	InitSpriteChemBomb(explosion);
-    }
-
-SetSuicide(SpriteNum);
-return(0);
-}
-            }
-        }
 
     // Parental lock crap
     if(TEST(sp->cstat, CSTAT_SPRITE_INVISIBLE))
@@ -1594,6 +1569,7 @@ static saveable_code saveable_bunny_code[] = {
 	SAVE_CODE(DoBunnyStandKill),
 	SAVE_CODE(BunnyHatch),
 	SAVE_CODE(BunnyHatch2),
+	SAVE_CODE(BunnyHatchBoss),
 	SAVE_CODE(DoBunnyMove),
 	SAVE_CODE(BunnySpew),
 	SAVE_CODE(DoBunnyEat),
