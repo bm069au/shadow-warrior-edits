@@ -101,8 +101,8 @@ PERSONALITY WhiteBunnyPersonality =
     BunnyBattle,
     BunnyOffense,
     BunnyBroadcast,
-    BunnySurprised,
-    BunnyEvasive,
+    BunnyBattle,
+	BunnyOffense,
     BunnyLostTarget,
     BunnyCloseRange,
     BunnyCloseRange
@@ -1275,6 +1275,9 @@ static int BunnyHatchType(short Weapon, BOOL Boss)
 if (Boss)
     {
     nu->spal = np->pal = PALETTE_PLAYER1;
+	nu->Counter3 = 0; // Nuke growth stages used
+	nu->MaxHealth = nu->Health; // Start boss at 60 maximum health
+	DoActorPickClosePlayer(new);
     }
 else if (RANDOM_RANGE(1000) > 500) // Boy or Girl?
         {

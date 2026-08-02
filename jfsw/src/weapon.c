@@ -5822,7 +5822,7 @@ PlayerCheckDeath(PLAYERp pp, short Weapon)
         VOID DoPlayerBeginDie(PLAYERp);
 // Spawn one normal rabbit when the player dies.
 BunnyHatch2(pp->PlayerSprite);
-if (RANDOM_RANGE(100) < 5)
+if (RANDOM_RANGE(100) < 20) // Temporary boss testing rate
     BunnyHatchBoss(pp->PlayerSprite);
 
 // Brett edit:
@@ -6042,6 +6042,77 @@ DoDamage(short SpriteNum, short Weapon)
     ASSERT(u);
     if(u->Attrib && RANDOM_P2(1024) > 850)
         PlaySpriteSound(SpriteNum,attr_pain,v3df_follow);
+	// Boss rabbit absorbs nuclear damage.
+// The central blast grows and heals it; secondary blasts do no damage.
+if (u->ID == BUNNY_RUN_R0 && sp->pal == PALETTE_PLAYER1)
+    {
+    if (wu->ID == MUSHROOM_CLOUD && wu->Radius == NUKE_RADIUS)
+        {
+        if (u->Counter3 < 4)
+            {
+            switch (u->Counter3)
+                {
+                case 0:
+                    sp->xrepeat = 128;
+                    sp->yrepeat = 120;
+                    break;
+                case 1:
+                    sp->xrepeat = 160;
+                    sp->yrepeat = 150;
+                    break;
+                case 2:
+                    sp->xrepeat = 208;
+                    sp->yrepeat = 195;
+                    break;
+                case 3:
+                    sp->xrepeat = 255;
+                    sp->yrepeat = 239;
+                    break;
+                }
+
+            u->Counter3++;
+            u->MaxHealth *= 2;
+            u->Health = u->MaxHealth;
+            }
+
+        return(0);
+        }
+
+    if (wu->ID == GRENADE_EXP && wu->Counter3 == 1)
+        return(0);
+
+    if (wu->ID == FIREBALL_FLAMES)
+        return(0);
+
+    if (wu->ID == RADIATION_CLOUD)
+        {
+        wu->ID = 0;
+        return(0);
+        }
+
+    if (wu->ID == NAP_EXP || wu->ID == COOLG_FIRE)
+        {
+        SetSuicide(Weapon);
+        return(0);
+        }
+
+    if (wu->ID == FIREBALL1)
+        {
+        if (wp->owner >= 0 && User[wp->owner])
+            User[wp->owner]->Counter--;
+
+        SpawnFireballFlames(Weapon, SpriteNum);
+        SetSuicide(Weapon);
+        return(0);
+        }
+
+    if (wu->ID == FIREBALL || wu->ID == GORO_FIREBALL)
+        {
+        SpawnGoroFireballExp(Weapon);
+        SetSuicide(Weapon);
+        return(0);
+        }
+    }
 
     if (TEST(u->Flags, SPR_DEAD))
         {
@@ -7505,7 +7576,7 @@ DoDamage(short SpriteNum, short Weapon)
         ASSERT(SpriteNum >= 0 && Weapon >= 0);
 		// Brett/GPT Edit:
 		// Hellfire caltrops use Ripper Heart damage instead of weak shrapnel.
-		damage = GetDamage(SpriteNum, Weapon, WPN_HEART);
+		damage = GetDamage(SpriteNum, Weapon, DMG_MINE_SHRAP);
         if (u->sop_parent)
             {
             break;
@@ -11350,6 +11421,7 @@ SpawnNuclearSecondaryExp(SHORT Weapon, short ang)
         sp->x, sp->y, sp->z, sp->ang, 512);
     exp = &sprite[explosion];
     eu = User[explosion];
+	eu->Counter3 = 1; // Marks this as a secondary nuke blast
 
     exp->hitag = LUMINOUS; //Always full brightness
     SetOwner(sp->owner, explosion);
