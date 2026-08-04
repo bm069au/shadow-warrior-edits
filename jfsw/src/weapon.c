@@ -5822,7 +5822,7 @@ PlayerCheckDeath(PLAYERp pp, short Weapon)
         VOID DoPlayerBeginDie(PLAYERp);
 // Spawn one normal rabbit when the player dies.
 BunnyHatch2(pp->PlayerSprite);
-if (RANDOM_RANGE(100) < 20) // Temporary boss testing rate
+if (RANDOM_RANGE(100) < 50)
     BunnyHatchBoss(pp->PlayerSprite);
 
 // Brett edit:
@@ -6066,15 +6066,22 @@ if (u->ID == BUNNY_RUN_R0 && sp->pal == PALETTE_PLAYER1)
                     break;
                 case 3:
                     sp->xrepeat = 255;
-                    sp->yrepeat = 239;
+                    sp->yrepeat = 255;
                     break;
                 }
 
             u->Counter3++;
+			sp->clipdist = 50 + ((25 * u->Counter3) / 4);
             u->MaxHealth *= 2;
             u->Health = u->MaxHealth;
             }
-
+else if (u->Counter3 == 4)
+    {
+    // At maximum size, the next nuclear boost summons one killer-rabbit ally.
+    BunnyHatchBoss(SpriteNum);
+    u->Counter3++;
+    u->Health = u->MaxHealth;
+    }
         return(0);
         }
 
@@ -7197,10 +7204,13 @@ if (u->ID == BUNNY_RUN_R0 && sp->pal == PALETTE_PLAYER1)
     case MINE_EXP:
         damage = GetDamage(SpriteNum, Weapon, DMG_MINE_EXP);
         if (wp->owner >= 0 && User[wp->owner] && User[wp->owner]->ID == SERP_RUN_R0)
+
             {
             damage /= 6;
             }
-
+        // Sticky bombs hurt the boss rabbit, but only at one-sixth damage.
+        if (u->ID == BUNNY_RUN_R0 && sp->pal == PALETTE_PLAYER1)
+            damage /= 6;
         if (u->sop_parent)
             {
             if (TEST(u->sop_parent->flags, SOBJ_DIE_HARD))

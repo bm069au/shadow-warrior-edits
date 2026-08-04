@@ -41,6 +41,10 @@ short Bunny_Count = 0;
 ANIMATOR DoActorMoveJump;
 ANIMATOR DoBunnyMoveJump;
 ANIMATOR DoBunnyQuickJump;
+ANIMATOR InitEnemyFireball;
+
+#define BOSS_BUNNY_INITIAL_HEALTH 180
+#define BOSS_BUNNY_FIREBALL_COOLDOWN SEC(3)
 
 
 DECISION BunnyBattle[] =
@@ -132,7 +136,7 @@ ATTRIBUTE BunnyAttrib =
 
 ATTRIBUTE WhiteBunnyAttrib =
     {
-    {200, 220, 340, 380},               // Speeds
+{260, 300, 420, 480},               // Faster killer-rabbit speeds
     {5, 0, -2, -4},                     // Tic Adjusts
     3,                                  // MaxWeapons;
     {DIGI_BUNNYAMBIENT, 0, DIGI_BUNNYATTACK,
@@ -1272,12 +1276,14 @@ static int BunnyHatchType(short Weapon, BOOL Boss)
 
     // make immediately active
     SET(nu->Flags, SPR_ACTIVE);
+
 if (Boss)
     {
     nu->spal = np->pal = PALETTE_PLAYER1;
-	nu->Counter3 = 0; // Nuke growth stages used
-	nu->MaxHealth = nu->Health; // Start boss at 60 maximum health
-	DoActorPickClosePlayer(new);
+    nu->Health = nu->MaxHealth = BOSS_BUNNY_INITIAL_HEALTH;
+    nu->Counter2 = SEC(2); // Delay the first ranged attack briefly
+    nu->Counter3 = 0; // Nuke growth stages used
+    DoActorPickClosePlayer(new);
     }
 else if (RANDOM_RANGE(1000) > 500) // Boy or Girl?
         {
@@ -1337,6 +1343,15 @@ DoBunnyMove(short SpriteNum)
     {
 	SPRITEp sp = &sprite[SpriteNum];
 	USERp u = User[SpriteNum];
+	    // Fireballs supplement the existing close-range bite attack.
+    if (u->Health > 0 && sp->pal == PALETTE_PLAYER1 &&
+        (u->Counter2 -= ACTORMOVETICS) <= 0)
+        {
+        DoActorPickClosePlayer(SpriteNum);
+        if (u->tgt_sp && CanSeePlayer(SpriteNum))
+            InitEnemyFireball(SpriteNum);
+        u->Counter2 = BOSS_BUNNY_FIREBALL_COOLDOWN;
+        }
 
 
 
