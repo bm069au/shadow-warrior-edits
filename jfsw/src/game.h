@@ -1257,6 +1257,7 @@ struct PLAYERstruct
     int TalkVocHandle;              // Handle of sound in sound queue, to access in Dose's code
     unsigned char WpnUziType;                // Toggle between single or double uzi's if you own 2.
     unsigned char WpnShotgunType;            // Shotgun has normal or fully automatic fire
+	unsigned char WpnMineType;               // Sticky bomb: 0 standard, 1 stalker
     unsigned char WpnShotgunAuto;            // 50-0 automatic shotgun rounds
     unsigned char WpnShotgunLastShell;       // Number of last shell fired
     unsigned char WpnRailType;               // Normal Rail Gun or EMP Burst Mode
@@ -1686,7 +1687,7 @@ typedef struct
 #define SPR2_DYING              (BIT(22))   // Sprite is currently dying
 #define SPR2_VIS_SHADING        (BIT(23))   // Sprite shading to go along with vis adjustments
 #define SPR2_DONT_TARGET_OWNER  (BIT(24))
-
+#define SPR2_STALKER_ACTIVE     (BIT(25))
 
 extern USERp User[MAXSPRITES];
 

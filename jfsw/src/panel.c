@@ -968,10 +968,23 @@ WeaponOperate(PLAYERp pp)
                 case WPN_GRENADE:
                     InitWeaponGrenade(pp);
                     break;
-                case WPN_MINE:
-                    //InitChops(pp);
-                    InitWeaponMine(pp);
-                    break;
+case WPN_MINE:
+    if (u->WeaponNum == WPN_MINE)
+        {
+        pp->WpnMineType++;
+        if (pp->WpnMineType > 1)
+            pp->WpnMineType = 0;
+
+        if (pp->WpnMineType == 0)
+            PutStringInfo(pp, "Standard Sticky Bomb");
+        else
+            PutStringInfo(pp, "Stalker Mine");
+
+        PlaySound(DIGI_MINE_UP, &pp->posx, &pp->posy, &pp->posz,
+            v3df_follow|v3df_dontpan);
+        }
+    InitWeaponMine(pp);
+    break;
                 case 13:
                     pp->WpnFirstType = WPN_FIST;
                     InitWeaponFist(pp);

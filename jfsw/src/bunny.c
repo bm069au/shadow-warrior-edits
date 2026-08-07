@@ -29,6 +29,7 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "names2.h"
 #include "panel.h"
 #include "game.h"
+#include "net.h"
 #include "tags.h"
 #include "ai.h"
 #include "pal.h"
@@ -1343,6 +1344,12 @@ DoBunnyMove(short SpriteNum)
     {
 	SPRITEp sp = &sprite[SpriteNum];
 	USERp u = User[SpriteNum];
+	if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120) &&
+    sp->pal == PALETTE_PLAYER1)
+    {
+    SetSuicide(SpriteNum);
+    return(0);
+    }
 	    // Fireballs supplement the existing close-range bite attack.
     if (u->Health > 0 && sp->pal == PALETTE_PLAYER1 &&
         (u->Counter2 -= ACTORMOVETICS) <= 0)

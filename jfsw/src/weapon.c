@@ -39,7 +39,6 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 #include "net.h"
 #include "pal.h"
 #include "vis.h"
-
 #include "ai.h"
 #include "weapon.h"
 #include "anim.h"
@@ -5822,7 +5821,8 @@ PlayerCheckDeath(PLAYERp pp, short Weapon)
         VOID DoPlayerBeginDie(PLAYERp);
 // Spawn one normal rabbit when the player dies.
 BunnyHatch2(pp->PlayerSprite);
-if (RANDOM_RANGE(100) < 50)
+if ((!gNet.TimeLimit || gNet.TimeLimitClock > (30 * 120)) &&
+    RANDOM_RANGE(100) < 20)
     BunnyHatchBoss(pp->PlayerSprite);
 
 // Brett edit:
@@ -6077,10 +6077,9 @@ if (u->ID == BUNNY_RUN_R0 && sp->pal == PALETTE_PLAYER1)
             }
 else if (u->Counter3 == 4)
     {
-    // At maximum size, the next nuclear boost summons one killer-rabbit ally.
-    BunnyHatchBoss(SpriteNum);
-    u->Counter3++;
-    u->Health = u->MaxHealth;
+    // The fifth central nuclear blast kills the boss rabbit.
+    u->Health = 0;
+    ActorChooseDeath(SpriteNum, Weapon);
     }
         return(0);
         }
@@ -9662,7 +9661,139 @@ DoMineRangeTest(short Weapon, short range)
 
     return (FALSE);
     }
+short
+FindStalkerMineTarget(SHORT Weapon, int range)
+    {
+    SPRITEp sp = &sprite[Weapon];
+    PLAYERp pp;
+    SPRITEp tsp;
+    short pnum;
+    short best_target = -1;
+    int dist;
+    int best_dist = range + 1;
 
+    TRAVERSE_CONNECT(pnum)
+        {
+        pp = Player + pnum;
+
+        if (pp->PlayerSprite < 0 || TEST(pp->Flags, PF_DEAD))
+            continue;
+
+        tsp = &sprite[pp->PlayerSprite];
+        dist = Distance(sp->x, sp->y, tsp->x, tsp->y);
+
+        if (dist > range || dist >= best_dist)
+            continue;
+
+        if (!FAFcansee(sp->x, sp->y, sp->z, sp->sectnum,
+            tsp->x, tsp->y, SPRITEp_MID(tsp), tsp->sectnum))
+            continue;
+
+        best_target = pp->PlayerSprite;
+        best_dist = dist;
+        }
+
+    return(best_target);
+    }
+short
+FindStalkerMineActor(SHORT Weapon, int range)
+    {
+    SPRITEp wp = &sprite[Weapon];
+    SPRITEp sp;
+    USERp u;
+    short i, nexti;
+    short best_target = -1;
+    unsigned stat;
+    int dist;
+    int best_dist = range + 1;
+
+    for (stat = 0; stat < SIZ(StatDamageList); stat++)
+        {
+        TRAVERSE_SPRITE_STAT(headspritestat[StatDamageList[stat]], i, nexti)
+            {
+            sp = &sprite[i];
+            u = User[i];
+
+            if (!u || i == Weapon)
+                continue;
+
+            if (!TEST(sp->extra, SPRX_PLAYER_OR_ENEMY))
+                continue;
+
+            if (!TEST(sp->cstat, CSTAT_SPRITE_BLOCK))
+                continue;
+
+            if (TEST(u->Flags, SPR_DEAD))
+                continue;
+
+            if (u->PlayerP && TEST(u->PlayerP->Flags, PF_DEAD))
+                continue;
+
+            dist = FindDistance3D(wp->x - sp->x, wp->y - sp->y,
+                (wp->z - SPRITEp_MID(sp)) >> 4);
+
+            if (dist > range || dist >= best_dist)
+                continue;
+
+            if (!FAFcansee(wp->x, wp->y, wp->z, wp->sectnum,
+                sp->x, sp->y, SPRITEp_MID(sp), sp->sectnum))
+                continue;
+
+            best_target = i;
+            best_dist = dist;
+            }
+        }
+
+    return(best_target);
+    }
+
+short
+FindStalkerMineAvoidAngle(SHORT Weapon, SPRITEp target)
+    {
+    SPRITEp sp = &sprite[Weapon];
+    static short angle_delta[8] =
+        { -160, 160, -384, 384, -256, 256, -512, 512 };
+    short base_ang;
+    short test_ang;
+    short best_ang = -1;
+    short stopsect;
+    unsigned short ret;
+    int stopx, stopy, stopz;
+    int dist;
+    int best_dist = -1;
+    int delta;
+    short i;
+
+    base_ang = NORM_ANGLE(getangle(target->x - sp->x,
+        target->y - sp->y));
+
+    for (i = 0; i < 8; i++)
+        {
+        delta = angle_delta[i];
+
+        // Alternate left/right preference between different mines.
+        if (Weapon & 1)
+            delta = -delta;
+
+        test_ang = NORM_ANGLE(base_ang + delta);
+
+        ret = move_scan(Weapon, test_ang, 2000,
+            &stopx, &stopy, &stopz, &stopsect);
+
+        if (ret == 0)
+            return(test_ang);
+
+        dist = Distance(sp->x, sp->y, stopx, stopy);
+
+        if (dist > best_dist)
+            {
+            best_dist = dist;
+            best_ang = test_ang;
+            }
+        }
+
+    return(best_ang);
+    }
 
 int
 DoMineStuck(SHORT Weapon)
@@ -9671,7 +9802,7 @@ DoMineStuck(SHORT Weapon)
     USERp u = User[Weapon];
     #define MINE_DETONATE_STATE 99
 	
-	if (gNet.TimeLimit && gNet.TimeLimitClock <= (60 * 120))
+if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120))
 	{
 	KillSprite(Weapon);
 	return(FALSE);
@@ -9699,9 +9830,20 @@ DoMineStuck(SHORT Weapon)
     // not activated yet
     if (!TEST(u->Flags, SPR_ACTIVE))
         {
+			if (u->Counter3 == 1 && u->WaitTics < SEC(1) &&
+    sp->xrepeat > 4 && sp->yrepeat > 4)
+    {
+    sp->xrepeat -= 2;
+    sp->yrepeat -= 2;
+    }
         if ((u->WaitTics -= (MISSILEMOVETICS*2)) > 0)
             return(FALSE);
-
+if (u->Counter3 == 1)
+    {
+    SET(sp->cstat, CSTAT_SPRITE_INVISIBLE);
+    sp->xrepeat = 32;
+    sp->yrepeat = 32;
+    }
         // activate it
         //u->WaitTics = 65536;
         u->WaitTics = 32767;
@@ -9713,6 +9855,137 @@ DoMineStuck(SHORT Weapon)
     u->Counter++;
     if (u->Counter > 1)
         u->Counter = 0;
+    // Stalker mine: remain silent until a visible player comes within range.
+    if (u->Counter3 == 1)
+        {
+        short target;
+        SPRITEp tsp;
+        USERp tu;
+        int dist;
+        int target_z;
+
+		if (!TEST(u->Flags2, SPR2_STALKER_ACTIVE))
+            {
+            if (!u->Counter)
+                {
+				target = FindStalkerMineActor(Weapon, 2000);
+
+                if (target >= 0)
+                    {
+                    u->WpnGoal = target;
+					SET(u->Flags2, SPR2_STALKER_ACTIVE);
+					RESET(sp->cstat, CSTAT_SPRITE_INVISIBLE);
+                    u->Counter2 = 0;
+					u->WaitTics = SEC(15);
+					if (TEST(u->Flags2, SPR2_ATTACH_FLOOR))
+						sp->z -= Z(8);
+					else if (TEST(u->Flags2, SPR2_ATTACH_CEILING))
+						sp->z += Z(8);
+                    PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
+                        v3df_dontpan);
+                    }
+                }
+
+            return(FALSE);
+            }
+
+        target = u->WpnGoal;
+
+        if (target < 0 || target >= MAXSPRITES)
+            {
+            u->WpnGoal = -1;
+			RESET(u->Flags2, SPR2_STALKER_ACTIVE);
+			SET(sp->cstat, CSTAT_SPRITE_INVISIBLE);
+            return(FALSE);
+            }
+
+        tu = User[target];
+
+		if (!tu || TEST(tu->Flags, SPR_DEAD) ||
+			(tu->PlayerP && TEST(tu->PlayerP->Flags, PF_DEAD)))
+            {
+            u->WpnGoal = -1;
+			RESET(u->Flags2, SPR2_STALKER_ACTIVE);
+			SET(sp->cstat, CSTAT_SPRITE_INVISIBLE);
+            return(FALSE);
+            }
+
+        // A direct hit remains attached and explodes when the mine awakens.
+        if (u->Attach >= 0)
+            {
+            SpawnMineExp(Weapon);
+            KillSprite(Weapon);
+            return(FALSE);
+            }
+
+        tsp = &sprite[target];
+        sp->xvel = 420;
+		sp->clipdist = 8;
+        sp->ang = NORM_ANGLE(getangle(tsp->x - sp->x, tsp->y - sp->y));
+
+        dist = Distance(sp->x, sp->y, tsp->x, tsp->y);
+        if (dist < 1)
+            dist = 1;
+
+        target_z = SPRITEp_MID(tsp);
+
+        u->xchange = MOVEx(sp->xvel, sp->ang);
+        u->ychange = MOVEy(sp->xvel, sp->ang);
+        u->zchange = (sp->xvel * (target_z - sp->z)) / dist;
+if (u->WaitTics > 0)
+    u->WaitTics -= (MISSILEMOVETICS * 2);
+if (u->WaitTics <= 0)
+    {
+    PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
+        v3df_dontpan);
+    SpawnMineExp(Weapon);
+    KillSprite(Weapon);
+    return(FALSE);
+    }
+        u->ret = move_missile(Weapon, u->xchange, u->ychange, u->zchange,
+            Z(8), Z(8), CLIPMASK_PLAYER, MISSILEMOVETICS);
+
+// Scan for the clearest route around obstacles.
+if (u->ret &&
+    !(TEST(u->ret, HIT_MASK) == HIT_SPRITE &&
+      NORM_SPRITE(u->ret) == target))
+    {
+    short avoid_ang;
+
+    avoid_ang = FindStalkerMineAvoidAngle(Weapon, tsp);
+
+    if (avoid_ang >= 0)
+        {
+        sp->ang = avoid_ang;
+        u->xchange = MOVEx(sp->xvel, sp->ang);
+        u->ychange = MOVEy(sp->xvel, sp->ang);
+
+        u->ret = move_missile(Weapon, u->xchange, u->ychange,
+            u->zchange, Z(8), Z(8), CLIPMASK_PLAYER,
+            MISSILEMOVETICS);
+        }
+    }
+        // Doors, walls, cupboards and the target itself detonate it on impact.
+if (u->ret && u->WaitTics <= SEC(12) &&
+    TEST(u->ret, HIT_MASK) == HIT_SPRITE &&
+    NORM_SPRITE(u->ret) == target)
+            {
+            PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
+                v3df_dontpan);
+            SpawnMineExp(Weapon);
+            KillSprite(Weapon);
+            return(FALSE);
+            }
+
+        if ((u->Counter2++) > 15)
+            {
+            PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
+                v3df_dontpan);
+            u->Counter2 = 0;
+            }
+
+        return(FALSE);
+        }
 
     if(u->Counter2 != MINE_DETONATE_STATE)
         {
@@ -9840,12 +10113,13 @@ SetMineStuck(SHORT Weapon)
     USERp u = User[Weapon];
 
     // stuck
-    SET(u->Flags, SPR_BOUNCE);
+		SET(u->Flags, SPR_BOUNCE);
     // not yet active for 1 sec
     RESET(u->Flags, SPR_ACTIVE);
     u->WaitTics = SEC(3);
     //SET(sp->cstat, CSTAT_SPRITE_BLOCK|CSTAT_SPRITE_BLOCK_HITSCAN);
-    SET(sp->cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
+		SET(sp->cstat, CSTAT_SPRITE_BLOCK_HITSCAN);
+
     u->Counter = 0;
     change_sprite_stat(Weapon, STAT_MINE_STUCK);
     ChangeState(Weapon, s_MineStuck);
@@ -19682,6 +19956,8 @@ InitMine(PLAYERp pp)
     int nx, ny, nz;
     short w;
     int dot;
+	if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120))
+    return(0);
 
     PlayerUpdateAmmo(pp, u->WeaponNum, -1);
 
@@ -19710,6 +19986,8 @@ InitMine(PLAYERp pp)
     wu->ceiling_dist = Z(5);
     wu->floor_dist = Z(5);
     wu->Counter = 0;
+	wu->Counter3 = pp->WpnMineType;       // 0 standard, 1 stalker
+	RESET(wu->Flags2, SPR2_STALKER_ACTIVE); // Stalker is dormant
     SET(wp->cstat, CSTAT_SPRITE_YCENTER);
     RESET(wp->cstat, CSTAT_SPRITE_BLOCK|CSTAT_SPRITE_BLOCK_HITSCAN);
     wu->spal = wp->pal = User[pp->PlayerSprite]->spal; // Set sticky color
@@ -19930,6 +20208,9 @@ InitEnemyFireball(short SpriteNum)
 
     tsp = u->tgt_sp;
 
+if (u->ID == BUNNY_RUN_R0 && sp->pal == PALETTE_PLAYER1)
+    PlaySound(DIGI_GRDFIREBALL, &sp->x, &sp->y, &sp->z, v3df_none);
+else
     PlaySound(DIGI_FIREBALL1, &sp->x, &sp->y, &sp->z, v3df_none);
 
     // get angle to player and also face player when attacking

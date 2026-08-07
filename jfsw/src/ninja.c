@@ -2205,6 +2205,7 @@ PlayerDeathReset(PLAYERp pp)
     pp->WpnFlameType = 0;              // Guardian weapons fire
     pp->WpnUziType = 2;
     pp->WpnShotgunType = 0;            // Shotgun has normal or fully automatic fire
+	pp->WpnMineType = 0;                 // Standard sticky bomb
     pp->WpnShotgunAuto = 0;            // 50-0 automatic shotgun rounds
     pp->WpnShotgunLastShell = 0;       // Number of last shell fired
     pp->Bloody = FALSE;
@@ -2294,6 +2295,7 @@ PlayerGameReset(PLAYERp pp)
     pp->WpnFlameType = 0; // Guardian weapons fire
     pp->WpnUziType = 2;
     pp->WpnShotgunType = 0;            // Shotgun has normal or fully automatic fire
+	pp->WpnMineType = 0;                 // Standard sticky bomb
     pp->WpnShotgunAuto = 0;            // 50-0 automatic shotgun rounds
     pp->WpnShotgunLastShell = 0;       // Number of last shell fired
     pp->Bloody = FALSE;
