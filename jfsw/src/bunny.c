@@ -137,7 +137,7 @@ ATTRIBUTE BunnyAttrib =
 
 ATTRIBUTE WhiteBunnyAttrib =
     {
-{260, 300, 420, 480},               // Faster killer-rabbit speeds
+{200, 220, 340, 380},               // Original killer-rabbit speeds
     {5, 0, -2, -4},                     // Tic Adjusts
     3,                                  // MaxWeapons;
     {DIGI_BUNNYAMBIENT, 0, DIGI_BUNNYATTACK,
@@ -1344,8 +1344,7 @@ DoBunnyMove(short SpriteNum)
     {
 	SPRITEp sp = &sprite[SpriteNum];
 	USERp u = User[SpriteNum];
-	if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120) &&
-    sp->pal == PALETTE_PLAYER1)
+	if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120))
     {
     SetSuicide(SpriteNum);
     return(0);

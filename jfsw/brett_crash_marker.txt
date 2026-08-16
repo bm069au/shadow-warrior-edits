@@ -1,7 +1,7 @@
 BRETT CRASH MARKER
-TIME: 2026-05-25 17:19:31
-CODE: RABT-002
+TIME: 2026-08-15 14:46:23
+CODE: NUK-005
 FILE: src\weapon.c
-LINE: 17667
+LINE: 11921
 FUNC: weapon.c
-NOTE: after hatch before cleanup
+NOTE: SpawnNuclearExp before return

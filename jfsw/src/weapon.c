@@ -5822,7 +5822,7 @@ PlayerCheckDeath(PLAYERp pp, short Weapon)
 // Spawn one normal rabbit when the player dies.
 BunnyHatch2(pp->PlayerSprite);
 if ((!gNet.TimeLimit || gNet.TimeLimitClock > (30 * 120)) &&
-    RANDOM_RANGE(100) < 20)
+	RANDOM_RANGE(100) < 5)
     BunnyHatchBoss(pp->PlayerSprite);
 
 // Brett edit:
@@ -9714,8 +9714,10 @@ FindStalkerMineActor(SHORT Weapon, int range)
             sp = &sprite[i];
             u = User[i];
 
-            if (!u || i == Weapon)
-                continue;
+			if (!u || i == Weapon || i == wp->owner)
+				continue;
+			if (u->ID == BUNNY_RUN_R0)
+				continue;
 
             if (!TEST(sp->extra, SPRX_PLAYER_OR_ENEMY))
                 continue;
@@ -9855,14 +9857,17 @@ if (u->Counter3 == 1)
     u->Counter++;
     if (u->Counter > 1)
         u->Counter = 0;
-    // Stalker mine: remain silent until a visible player comes within range.
+// Stalker mine: acquire a visible non-rabbit target, announce, and chase.
     if (u->Counter3 == 1)
         {
         short target;
         SPRITEp tsp;
         USERp tu;
+		USERp uo;
+		PLAYERp pp;
         int dist;
         int target_z;
+		int target_dist;
 
 		if (!TEST(u->Flags2, SPR2_STALKER_ACTIVE))
             {
@@ -9876,13 +9881,39 @@ if (u->Counter3 == 1)
 					SET(u->Flags2, SPR2_STALKER_ACTIVE);
 					RESET(sp->cstat, CSTAT_SPRITE_INVISIBLE);
                     u->Counter2 = 0;
-					u->WaitTics = SEC(15);
+					u->WaitTics = SEC(8);
 					if (TEST(u->Flags2, SPR2_ATTACH_FLOOR))
 						sp->z -= Z(8);
 					else if (TEST(u->Flags2, SPR2_ATTACH_CEILING))
 						sp->z += Z(8);
-                    PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
-                        v3df_dontpan);
+                    if (sp->owner >= 0)
+						{
+						uo = User[sp->owner];
+
+						if (uo && uo->PlayerP)
+							{
+							pp = uo->PlayerP;
+							switch (RANDOM_RANGE(4))
+							{
+							case 0:
+								PlayerSound(DIGI_STICKYGOTU1, &pp->posx, &pp->posy, &pp->posz,
+									v3df_follow|v3df_dontpan, pp);
+								break;
+								case 1:
+									PlayerSound(DIGI_STICKYGOTU2, &pp->posx, &pp->posy, &pp->posz,
+										v3df_follow|v3df_dontpan, pp);
+									break;
+										case 2:
+											PlayerSound(DIGI_STICKYGOTU3, &pp->posx, &pp->posy, &pp->posz,
+												v3df_follow|v3df_dontpan, pp);
+										break;
+											case 3:
+												PlayerSound(DIGI_STICKYGOTU4, &pp->posx, &pp->posy, &pp->posz,
+													v3df_follow|v3df_dontpan, pp);
+										break;
+							}
+							}
+						}
                     }
                 }
 
@@ -9910,16 +9941,22 @@ if (u->Counter3 == 1)
             return(FALSE);
             }
 
-        // A direct hit remains attached and explodes when the mine awakens.
+        // A direct hit remains attached and waits for the 3-second safety period.
         if (u->Attach >= 0)
             {
-            SpawnMineExp(Weapon);
+        if (u->WaitTics > SEC(5))
+			{
+			u->WaitTics -= (MISSILEMOVETICS * 2);
+			return(FALSE);
+			}
+
+			SpawnMineExp(Weapon);
             KillSprite(Weapon);
             return(FALSE);
             }
 
         tsp = &sprite[target];
-        sp->xvel = 420;
+        sp->xvel = 473;
 		sp->clipdist = 8;
         sp->ang = NORM_ANGLE(getangle(tsp->x - sp->x, tsp->y - sp->y));
 
@@ -9938,13 +9975,24 @@ if (u->WaitTics <= 0)
     {
     PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
         v3df_dontpan);
-    SpawnMineExp(Weapon);
     KillSprite(Weapon);
     return(FALSE);
     }
         u->ret = move_missile(Weapon, u->xchange, u->ychange, u->zchange,
             Z(8), Z(8), CLIPMASK_PLAYER, MISSILEMOVETICS);
 
+target_dist = FindDistance3D(sp->x - tsp->x, sp->y - tsp->y,
+    (sp->z - target_z) >> 4);
+if (u->WaitTics <= SEC(5) && target_dist <= 3000 &&
+    FAFcansee(sp->x, sp->y, sp->z, sp->sectnum,
+        tsp->x, tsp->y, target_z, tsp->sectnum))
+    {
+		PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
+    v3df_dontpan);
+	SpawnMineExp(Weapon);
+	KillSprite(Weapon);
+	return(FALSE);
+    }
 // Scan for the clearest route around obstacles.
 if (u->ret &&
     !(TEST(u->ret, HIT_MASK) == HIT_SPRITE &&
@@ -9965,8 +10013,8 @@ if (u->ret &&
             MISSILEMOVETICS);
         }
     }
-        // Doors, walls, cupboards and the target itself detonate it on impact.
-if (u->ret && u->WaitTics <= SEC(12) &&
+// After the 3-second safety period, impact with the selected target detonates it.
+if (u->ret && u->WaitTics <= SEC(5) &&
     TEST(u->ret, HIT_MASK) == HIT_SPRITE &&
     NORM_SPRITE(u->ret) == target)
             {
@@ -10132,6 +10180,12 @@ DoMine(SHORT Weapon)
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
 
+    if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120))
+        {
+        KillSprite(Weapon);
+        return(0);
+        }
+
     if (TEST(u->Flags, SPR_UNDERWATER))
         {
         // decrease velocity
@@ -10168,6 +10222,11 @@ DoMine(SHORT Weapon)
                 short hitsprite = NORM_SPRITE(u->ret);
                 SPRITEp hsp = &sprite[hitsprite];
                 USERp hu = User[hitsprite];
+	if (u->Counter3 == 1 && hu && hu->ID == BUNNY_RUN_R0)
+		{
+		u->ret = 0;
+		return(FALSE);
+		}
 
                 SetMineStuck(Weapon);
                 // Set the Z position
@@ -11556,13 +11615,22 @@ SpawnGoroFireballExp(SHORT Weapon)
     SPRITEp exp;
     USERp eu;
     short explosion;
+    BOOL boss_bunny_impact;
 
     ASSERT(u);
 
     if (TEST(u->Flags, SPR_SUICIDE))
         return (-1);
-
-    PlaySound(DIGI_MEDIUMEXP, &sp->x, &sp->y, &sp->z, v3df_none);
+    boss_bunny_impact =
+        sp->owner >= 0 &&
+        sp->owner < MAXSPRITES &&
+        User[sp->owner] &&
+        User[sp->owner]->ID == BUNNY_RUN_R0 &&
+        sprite[sp->owner].pal == PALETTE_PLAYER1;
+    if (boss_bunny_impact)
+        PlaySound(DIGI_SMALLEXP, &sp->x, &sp->y, &sp->z, v3df_none);
+    else
+        PlaySound(DIGI_MEDIUMEXP, &sp->x, &sp->y, &sp->z, v3df_none);
 
     explosion = SpawnSprite(STAT_MISSILE, 0, s_FireballExp, sp->sectnum,
         sp->x, sp->y, sp->z, sp->ang, 0);
@@ -20198,7 +20266,7 @@ InitEnemyFireball(short SpriteNum)
     USERp wu;
     SPRITEp tsp;
     int i, targ_z, xchange, ychange;
-
+    BOOL boss_bunny;
     static short lat_ang[] =
       {
       512, -512
@@ -20207,10 +20275,13 @@ InitEnemyFireball(short SpriteNum)
     ASSERT(SpriteNum >= 0);
 
     tsp = u->tgt_sp;
+	boss_bunny =
+		u->ID == BUNNY_RUN_R0 &&
+		sp->pal == PALETTE_PLAYER1;
 
-if (u->ID == BUNNY_RUN_R0 && sp->pal == PALETTE_PLAYER1)
-    PlaySound(DIGI_GRDFIREBALL, &sp->x, &sp->y, &sp->z, v3df_none);
-else
+	if (boss_bunny)
+		PlaySound(DIGI_HEADFIRE, &sp->x, &sp->y, &sp->z, v3df_none);
+	else
     PlaySound(DIGI_FIREBALL1, &sp->x, &sp->y, &sp->z, v3df_none);
 
     // get angle to player and also face player when attacking
@@ -20223,7 +20294,7 @@ else
     xchange = MOVEx(GORO_FIREBALL_VELOCITY, sp->ang);
     ychange = MOVEy(GORO_FIREBALL_VELOCITY, sp->ang);
 
-    for (i = 0; i < 2; i++)
+	for (i = 0; i < (boss_bunny ? 1 : 2); i++)
         {
         w = SpawnSprite(STAT_MISSILE, GORO_FIREBALL, s_Fireball, sp->sectnum,
                 sp->x, sp->y, nz, sp->ang, GORO_FIREBALL_VELOCITY);
