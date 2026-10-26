@@ -925,17 +925,22 @@ WeaponOperate(PLAYERp pp)
                 case WPN_RAIL:
                     if (!SW_SHAREWARE)
                         {
-                        #if 0
-                        if (u->WeaponNum == WPN_RAIL)
+                        if (u->WeaponNum == WPN_RAIL && pp->HasShrinkRay)
                             {
-                            pp->WpnRailType++;
-                            if (pp->WpnRailType > 1)
-                                pp->WpnRailType = 0;
+                            pp->WpnRailType = !pp->WpnRailType;
+                            if (pp->WpnRailType == 1)
+                                PutStringInfo(pp, "Shrink Ray");
+                            else
+                                PutStringInfo(pp, "Rail Gun");
+                            PlaySound(DIGI_RAIL_UP, &pp->posx, &pp->posy, &pp->posz, v3df_follow|v3df_dontpan);
                             }
-                        if(pp->WpnRailType == 1)
-                            PlaySound(DIGI_RAIL_UP, &pp->posx, &pp->posy, &pp->posz, v3df_follow);
-                        #endif
+                        else if (!pp->HasShrinkRay)
+                            {
+                            pp->WpnRailType = 0;
+                            }
                         InitWeaponRail(pp);
+                        if (pp->Wpn[WPN_RAIL])
+                            pp->Wpn[WPN_RAIL]->pal = (pp->WpnRailType == 1) ? PALETTE_GREEN_LIGHTING : 0;
                         }
                     else
                         PutStringInfo(pp,"Order the full version");
@@ -961,7 +966,24 @@ WeaponOperate(PLAYERp pp)
                     break;
                 case WPN_HEART:
                     if (!SW_SHAREWARE)
+                        {
+                        if (u->WeaponNum == WPN_HEART && pp->HasFreezeGun)
+                            {
+                            pp->WpnHeartType = !pp->WpnHeartType;
+                            if (pp->WpnHeartType == 1)
+                                PutStringInfo(pp, "Ice Crystal Gun");
+                            else
+                                PutStringInfo(pp, "Ripper Heart");
+                            PlaySound(DIGI_HEARTBEAT, &pp->posx, &pp->posy, &pp->posz, v3df_follow|v3df_dontpan);
+                            }
+                        else if (!pp->HasFreezeGun)
+                            {
+                            pp->WpnHeartType = 0;
+                            }
                         InitWeaponHeart(pp);
+                        if (pp->Wpn[WPN_HEART])
+                            pp->Wpn[WPN_HEART]->pal = (pp->WpnHeartType == 1) ? PALETTE_BLUE_LIGHTING : 0;
+                        }
                     else
                         PutStringInfo(pp,"Order the full version");
                     break;
@@ -3691,6 +3713,7 @@ InitWeaponRail(PLAYERp pp)
 
     // Set up the new Weapon variables
     psp = pp->CurWpn = pp->Wpn[pp->WeaponType];
+    psp->pal = (pp->WpnRailType == 1) ? PALETTE_GREEN_LIGHTING : 0;
     SET(psp->flags, PANF_WEAPON_SPRITE);
     psp->ActionState = ps_RailFire;
     psp->RetractState = ps_RetractRail;
@@ -3851,10 +3874,7 @@ pRailRest(PANEL_SPRITEp psp)
             //PlaySound(DIGI_RAILPWRUP, &psp->PlayerP->posx, &psp->PlayerP->posy, &psp->PlayerP->posz, v3df_follow);
 
             DoPlayerChooseYell(psp->PlayerP);
-            if(psp->PlayerP->WpnRailType == 0)
-                pSetState(psp, ps_RailFire);
-            else
-                pSetState(psp, ps_RailFireEMP);
+            pSetState(psp, ps_RailFire);
             }
         } else
             WeaponOK(psp->PlayerP);
@@ -3900,13 +3920,13 @@ void
 pRailFire(PANEL_SPRITEp psp)
     {
     int InitRail(PLAYERp pp);
-    int InitEMP(PLAYERp pp);
+    int InitShrinkRay(PLAYERp pp);
 
     SpawnVis(psp->PlayerP->PlayerSprite, -1, -1, -1, -1, 16);
     if(psp->PlayerP->WpnRailType == 0)
         InitRail(psp->PlayerP);
     else
-        InitEMP(psp->PlayerP);
+        InitShrinkRay(psp->PlayerP);
     }
 
 void
@@ -5058,6 +5078,7 @@ InitWeaponHeart(PLAYERp pp)
 
     // Set up the new Weapon variables
     psp = pp->CurWpn = pp->Wpn[WPN_HEART];
+    psp->pal = (pp->WpnHeartType == 1) ? PALETTE_BLUE_LIGHTING : 0;
     SET(psp->flags, PANF_WEAPON_SPRITE);
     psp->ActionState = ps_HeartAttack;
     psp->RetractState = ps_RetractHeart;
@@ -5197,12 +5218,16 @@ pHeartAttack(PANEL_SPRITEp psp)
 	// CTW MODIFICATION
     //int InitHeartAttack(PLAYERp pp);
     void InitHeartAttack(PLAYERp pp);
+    int InitIceCrystalGun(PLAYERp pp);
 	// CTW MODIFICATION END
 
     PlaySound(DIGI_HEARTFIRE,&pp->posx,&pp->posy,&pp->posz,v3df_follow|v3df_dontpan);
     if (RANDOM_RANGE(1000) > 800)
         PlayerSound(DIGI_JG9009,&pp->posx,&pp->posy,&pp->posz,v3df_follow|v3df_dontpan,pp);
-    InitHeartAttack(psp->PlayerP);
+    if (pp->WpnHeartType == 1)
+        InitIceCrystalGun(pp);
+    else
+        InitHeartAttack(psp->PlayerP);
     }
 
 void

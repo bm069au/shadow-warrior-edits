@@ -30,6 +30,8 @@ Prepared for public release: 03/28/2005 - Charlie Wiederhold, 3D Realms
 
 #include "keys.h"
 #include "names2.h"
+#include "jnames.h"
+#include "reserve.h"
 #include "panel.h"
 #include "game.h"
 #include "tags.h"
@@ -4606,7 +4608,7 @@ WeaponMoveHit(short SpriteNum)
 
             if (TEST(sectp->ceilingstat, CEILING_STAT_PLAX) && sectp->ceilingpicnum != FAF_MIRROR_PIC)
                 {
-                if (labs(sp->z - sectp->ceilingz) < SPRITEp_SIZE_Z(sp))
+                if (sp->z <= sectp->ceilingz - Z(250))
                     {
                     SetSuicide(SpriteNum);
                     return (TRUE);
@@ -5001,7 +5003,14 @@ int
 SetSuicide(short SpriteNum)
     {
     #if 1
-    USERp u = User[SpriteNum];
+    USERp u;
+
+    if (SpriteNum < 0 || SpriteNum >= MAXSPRITES)
+        return(0);
+
+    u = User[SpriteNum];
+    if (!u)
+        return(0);
 
     SET(u->Flags, SPR_SUICIDE);
     u->RotNum = 0;
@@ -6970,6 +6979,34 @@ else if (u->Counter3 == 4)
         else
         if (u->PlayerP)
             {
+            if (wu->Counter3 == 1 && TEST(u->PlayerP->Flags2, PF2_FROZEN))
+                break;
+
+            if (wu->Radius == NUKE_RADIUS)
+                {
+                int nuke_dist = FindDistance3D(sp->x - wp->x, sp->y - wp->y, (sp->z - wp->z) >> 4);
+                if (nuke_dist > (NUKE_RADIUS / 2))
+                    {
+                    PLAYERp fpp = u->PlayerP;
+                    if (!TEST(fpp->Flags, PF_DEAD) && !TEST(fpp->Flags, PF_CLIP_CHEAT) && !GodMode)
+                        {
+                        SET(fpp->Flags2, PF2_FROZEN);
+                        fpp->freeze_tics = SEC(10);
+                        RESET(fpp->Flags2, PF2_GRAPPLING);
+                        if (fpp->Armor > 0)
+                            PlayerUpdateArmor(fpp, -fpp->Armor);
+                        if (u->Health > 20)
+                            PlayerUpdateHealth(fpp, -2000 + (20 - u->Health));
+                        sp->pal = PALETTE_BLUE_LIGHTING;
+                        fpp->xvect = 0;
+                        fpp->yvect = 0;
+                        if (fpp == Player + screenpeek)
+                            SetFadeAmt(fpp, -50, 208);
+                        }
+                    break;
+                    }
+                }
+
             PlayerDamageSlide(u->PlayerP, damage, ANG2PLAYER(u->PlayerP, wp));
             if (PlayerTakeDamage(u->PlayerP, Weapon))
                 {
@@ -7518,6 +7555,11 @@ else if (u->Counter3 == 4)
         else
         if (u->PlayerP)
             {
+            if (TEST(u->PlayerP->Flags2, PF2_FROZEN))
+                {
+                wu->ID = 0;
+                break;
+                }
             if (PlayerTakeDamage(u->PlayerP, Weapon))
                 {
                 PLAYERp pp = u->PlayerP;
@@ -7583,6 +7625,7 @@ else if (u->Counter3 == 4)
     case CALTROPS:
 
         ASSERT(SpriteNum >= 0 && Weapon >= 0);
+        BRETT_MARK("CALT-001", "entered caltrops damage case");
 		// Brett/GPT Edit:
 		// Hellfire caltrops use Ripper Heart damage instead of weak shrapnel.
 		damage = GetDamage(SpriteNum, Weapon, DMG_MINE_SHRAP);
@@ -7616,7 +7659,9 @@ else if (u->Counter3 == 4)
         }
 		// Brett/GPT Edit:
 		// Hellfire caltrops attach real fireball flames to whatever triggered them.
+		BRETT_MARK("CALT-002", "before SpawnFireballFlames");
 		SpawnFireballFlames(Weapon, SpriteNum);
+        BRETT_MARK("CALT-003", "after SpawnFireballFlames");
 		
         SetSuicide(Weapon);
         break;
@@ -8041,9 +8086,27 @@ int DoExpDamageTest(short Weapon)
     int found_dist = 999999;
     int DoWallMoveMatch(short match);
 
+    BOOL cracked_secret_wall = FALSE;
+
     // crack sprites
     if(wu->ID != MUSHROOM_CLOUD)
+        {
+        short ci, cnexti;
+        TRAVERSE_SPRITE_STAT(headspritestat[STAT_SPRITE_HIT_MATCH], ci, cnexti)
+            {
+            SPRITEp csp = &sprite[ci];
+            if (csp->statnum == STAT_SPRITE_HIT_MATCH)
+                {
+                int cd3d = FindDistance3D(wp->x - csp->x, wp->y - csp->y, (wp->z - csp->z) >> 4);
+                if ((unsigned)cd3d <= (unsigned)((wu->Radius >> 1) + (SP_TAG5(csp) << 2)))
+                    {
+                    cracked_secret_wall = TRUE;
+                    break;
+                    }
+                }
+            }
         WeaponExplodeSectorInRange(Weapon);
+        }
 
     // Just like DoDamageTest() except that it doesn't care about the owner
 
@@ -8082,7 +8145,8 @@ int DoExpDamageTest(short Weapon)
 
                 // Second parameter MUST have blocking bits set or cansee won't work
                 // added second check for FAF water - hitscans were hitting ceiling
-                if (!FAFcansee(wp->x, wp->y, wp->z, wp->sectnum, sp->x, sp->y, SPRITEp_UPPER(sp), sp->sectnum) &&
+                if (!cracked_secret_wall &&
+                    !FAFcansee(wp->x, wp->y, wp->z, wp->sectnum, sp->x, sp->y, SPRITEp_UPPER(sp), sp->sectnum) &&
                     !FAFcansee(wp->x, wp->y, wp->z, wp->sectnum, sp->x, sp->y, SPRITEp_LOWER(sp), sp->sectnum))
                     continue;
 
@@ -9803,12 +9867,6 @@ DoMineStuck(SHORT Weapon)
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
     #define MINE_DETONATE_STATE 99
-	
-if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120))
-	{
-	KillSprite(Weapon);
-	return(FALSE);
-	}
 
     // if no owner then die
     if (u->Attach >= 0)
@@ -9816,17 +9874,22 @@ if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120))
         SPRITEp ap = &sprite[u->Attach];
         USERp au = User[u->Attach];
 
-        ASSERT(au);
+        if (!au)
+            {
+            u->Attach = -1;
+            }
+        else
+            {
+            // Is it attached to a dead actor? Blow it up if so.
+            if(TEST(au->Flags, SPR_DEAD) && u->Counter2 < MINE_DETONATE_STATE)
+                {
+                u->Counter2 = MINE_DETONATE_STATE;
+                u->WaitTics = SEC(1)/2;
+                }
 
-        // Is it attached to a dead actor? Blow it up if so.
-        if(TEST(au->Flags, SPR_DEAD) && u->Counter2 < MINE_DETONATE_STATE)
-        {
-            u->Counter2 = MINE_DETONATE_STATE;
-            u->WaitTics = SEC(1)/2;
-        }
-
-        setspritez(Weapon, ap->x, ap->y, ap->z - u->sz);
-        sp->z = ap->z - DIV2(SPRITEp_SIZE_Z(ap));
+            setspritez(Weapon, ap->x, ap->y, ap->z - u->sz);
+            sp->z = ap->z - DIV2(SPRITEp_SIZE_Z(ap));
+            }
         }
 
     // not activated yet
@@ -9886,14 +9949,14 @@ if (u->Counter3 == 1)
 						sp->z -= Z(8);
 					else if (TEST(u->Flags2, SPR2_ATTACH_CEILING))
 						sp->z += Z(8);
-                    if (sp->owner >= 0)
+                    if (target >= 0)
 						{
-						uo = User[sp->owner];
+						uo = User[target];
 
-						if (uo && uo->PlayerP)
+						if (uo && uo->PlayerP == Player + myconnectindex)
 							{
 							pp = uo->PlayerP;
-							switch (RANDOM_RANGE(4))
+							switch (STD_RANDOM_RANGE(4))
 							{
 							case 0:
 								PlayerSound(DIGI_STICKYGOTU1, &pp->posx, &pp->posy, &pp->posz,
@@ -9956,7 +10019,8 @@ if (u->Counter3 == 1)
             }
 
         tsp = &sprite[target];
-        sp->xvel = 473;
+        // stalker mine speed. 500 is about 95% run speed.
+        sp->xvel = 500;
 		sp->clipdist = 8;
         sp->ang = NORM_ANGLE(getangle(tsp->x - sp->x, tsp->y - sp->y));
 
@@ -9975,6 +10039,7 @@ if (u->WaitTics <= 0)
     {
     PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z,
         v3df_dontpan);
+    SpawnMineExp(Weapon);
     KillSprite(Weapon);
     return(FALSE);
     }
@@ -9993,6 +10058,29 @@ if (u->WaitTics <= SEC(5) && target_dist <= 3000 &&
 	KillSprite(Weapon);
 	return(FALSE);
     }
+// If the Stalker Mine hits a cracked secret-room wall while its target is right behind it, detonate and breach!
+if (u->ret && u->WaitTics <= SEC(5) && target_dist <= 3500 &&
+    TEST(u->ret, HIT_MASK) == HIT_WALL)
+    {
+    short ci, cnexti;
+    TRAVERSE_SPRITE_STAT(headspritestat[STAT_SPRITE_HIT_MATCH], ci, cnexti)
+        {
+        SPRITEp csp = &sprite[ci];
+        if (csp->statnum == STAT_SPRITE_HIT_MATCH)
+            {
+            int cdist = FindDistance3D(sp->x - csp->x, sp->y - csp->y, (sp->z - csp->z) >> 4);
+            if (cdist <= 3000 &&
+                FAFcansee(sp->x, sp->y, sp->z, sp->sectnum, csp->x, csp->y, csp->z, csp->sectnum))
+                {
+                PlaySound(DIGI_MINEBEEP, &sp->x, &sp->y, &sp->z, v3df_dontpan);
+                SpawnMineExp(Weapon);
+                KillSprite(Weapon);
+                return(FALSE);
+                }
+            }
+        }
+    }
+
 // Scan for the clearest route around obstacles.
 if (u->ret &&
     !(TEST(u->ret, HIT_MASK) == HIT_SPRITE &&
@@ -10180,12 +10268,6 @@ DoMine(SHORT Weapon)
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
 
-    if (gNet.TimeLimit && gNet.TimeLimitClock <= (30 * 120))
-        {
-        KillSprite(Weapon);
-        return(0);
-        }
-
     if (TEST(u->Flags, SPR_UNDERWATER))
         {
         // decrease velocity
@@ -10245,7 +10327,7 @@ DoMine(SHORT Weapon)
                     SetAttach(hitsprite, Weapon);
                     u->sz = sprite[hitsprite].z - sp->z;
 
-                    if (sp->owner >= 0)
+					if (sp->owner >= 0)
                         {
                         uo = User[sp->owner];
 
@@ -10484,22 +10566,22 @@ DoEMP(SHORT Weapon)
 int
 DoEMPBurst(SHORT Weapon)
     {
-
     SPRITEp sp = &sprite[Weapon];
-USERp u = User[Weapon];
+    USERp u = User[Weapon];
 
-if (gNet.TimeLimit && gNet.TimeLimitClock <= (60 * 120))
-    {
-    KillSprite(Weapon);
-    return(FALSE);
-    }
-
-if (u->Attach >= 0)
+    if (u->Attach >= 0)
         {
-        SPRITEp ap = &sprite[u->Attach];
+        if (!User[u->Attach])
+            {
+            u->Attach = -1;
+            }
+        else
+            {
+            SPRITEp ap = &sprite[u->Attach];
 
-        setspritez(Weapon, ap->x, ap->y, ap->z - u->sz);
-        sp->ang = NORM_ANGLE(ap->ang+1024);
+            setspritez(Weapon, ap->x, ap->y, ap->z - u->sz);
+            sp->ang = NORM_ANGLE(ap->ang+1024);
+            }
         }
 
     // not activated yet
@@ -11118,15 +11200,168 @@ DoBoltSeeker(SHORT Weapon)
 int
 DoBoltShrapnel(SHORT Weapon)
     {
-    (void)Weapon;
-    return(0);
+    // Shrink Ray Bolt (Mirror-Reflecting Energy Projectile)
+    SPRITEp sp = &sprite[Weapon];
+    USERp u = User[Weapon];
+
+    u->ret = move_missile(Weapon, u->xchange, u->ychange, u->zchange,
+        u->ceiling_dist, u->floor_dist, CLIPMASK_MISSILE, MISSILEMOVETICS);
+
+    MissileHitDiveArea(Weapon);
+
+    if (u->ret)
+        {
+        switch (TEST(u->ret, HIT_MASK))
+            {
+            case HIT_PLAX_WALL:
+                KillSprite(Weapon);
+                return(TRUE);
+
+            case HIT_WALL:
+                {
+                short hitwall = NORM_WALL(u->ret);
+                WALLp wp = &wall[hitwall];
+
+                if (wp->overpicnum == MIRROR || wp->picnum == MIRROR ||
+                    (wp->overpicnum >= MIRRORLABEL && wp->overpicnum < MIRRORLABEL + MAXMIRRORS) ||
+                    (wp->picnum >= MIRRORLABEL && wp->picnum < MIRRORLABEL + MAXMIRRORS))
+                    {
+                    short nw = wp->point2;
+                    short wall_tan = NORM_ANGLE(getangle(wall[nw].x - wp->x, wall[nw].y - wp->y));
+
+                    sp->ang = NORM_ANGLE((wall_tan << 1) - sp->ang);
+                    u->xchange = MOVEx(sp->xvel, sp->ang);
+                    u->ychange = MOVEy(sp->xvel, sp->ang);
+                    u->zchange = -u->zchange;
+
+                    // Clear owner protection so reflected beam can shrink the shooter!
+                    sp->owner = -1;
+                    RESET(u->Flags2, SPR2_DONT_TARGET_OWNER);
+                    PlaySound(DIGI_RAILFIRE, &sp->x, &sp->y, &sp->z, v3df_none);
+                    return(FALSE);
+                    }
+                break;
+                }
+
+            case HIT_SPRITE:
+                {
+                short hitsprite = NORM_SPRITE(u->ret);
+                SPRITEp hsp = &sprite[hitsprite];
+                USERp hu = User[hitsprite];
+
+                if (hu && hu->PlayerP)
+                    {
+                    PLAYERp tpp = hu->PlayerP;
+                    if (!TEST(tpp->Flags, PF_DEAD))
+                        {
+                        SET(tpp->Flags2, PF2_SHRUNK);
+                        tpp->shrink_tics = SEC(10);
+                        hsp->xrepeat = 14;
+                        hsp->yrepeat = 14;
+                        hsp->clipdist = 16;
+                        tpp->floor_dist = Z(6);
+                        tpp->ceiling_dist = Z(4);
+                        tpp->posz = tpp->loz - Z(14);
+                        SetFadeAmt(tpp, -40, 144);
+                        PutStringInfo(tpp, "Shrunk for 10 Seconds!");
+                        PlaySound(DIGI_ITEM, &hsp->x, &hsp->y, &hsp->z, v3df_none);
+                        }
+                    SpawnBoltExp(Weapon);
+                    KillSprite(Weapon);
+                    return(TRUE);
+                    }
+                else if (hu && TEST(hsp->extra, SPRX_PLAYER_OR_ENEMY))
+                    {
+                    hsp->xrepeat = max(12, hsp->xrepeat >> 1);
+                    hsp->yrepeat = max(12, hsp->yrepeat >> 1);
+                    SpawnBoltExp(Weapon);
+                    KillSprite(Weapon);
+                    return(TRUE);
+                    }
+                break;
+                }
+            }
+
+        if (WeaponMoveHit(Weapon))
+            {
+            SpawnBoltExp(Weapon);
+            KillSprite(Weapon);
+            return(TRUE);
+            }
+        }
+
+    return(FALSE);
     }
 
 int
 DoBoltFatMan(SHORT Weapon)
     {
-    (void)Weapon;
-    return(0);
+    // Ice Crystal Gun Projectile (Freezes enemy players for 10s & drops HP to 20)
+    SPRITEp sp = &sprite[Weapon];
+    USERp u = User[Weapon];
+
+    u->ret = move_missile(Weapon, u->xchange, u->ychange, u->zchange,
+        u->ceiling_dist, u->floor_dist, CLIPMASK_MISSILE, MISSILEMOVETICS);
+
+    MissileHitDiveArea(Weapon);
+
+    if (u->ret)
+        {
+        switch (TEST(u->ret, HIT_MASK))
+            {
+            case HIT_PLAX_WALL:
+                KillSprite(Weapon);
+                return(TRUE);
+
+            case HIT_SPRITE:
+                {
+                short hitsprite = NORM_SPRITE(u->ret);
+                SPRITEp hsp = &sprite[hitsprite];
+                USERp hu = User[hitsprite];
+
+                if (hu && hu->PlayerP)
+                    {
+                    PLAYERp fpp = hu->PlayerP;
+                    if (!TEST(fpp->Flags, PF_DEAD))
+                        {
+                        if (TEST(fpp->Flags2, PF2_FROZEN))
+                            {
+                            // Shatter already-frozen player!
+                            fpp->DeathType = PLAYER_DEATH_CRUMBLE;
+                            PlayerUpdateHealth(fpp, -50);
+                            PlayerCheckDeath(fpp, Weapon);
+                            }
+                        else
+                            {
+                            SET(fpp->Flags2, PF2_FROZEN);
+                            fpp->freeze_tics = SEC(10);
+                            if (fpp->Armor > 0)
+                                PlayerUpdateArmor(fpp, -fpp->Armor);
+                            if (hu->Health > 20)
+                                PlayerUpdateHealth(fpp, -(hu->Health - 20));
+                            hsp->pal = PALETTE_BLUE_LIGHTING;
+                            SetFadeAmt(fpp, -50, 208);
+                            PutStringInfo(fpp, "Frozen by Ice Crystal Gun!");
+                            PlaySound(DIGI_ITEM, &hsp->x, &hsp->y, &hsp->z, v3df_none);
+                            }
+                        }
+                    SpawnBoltExp(Weapon);
+                    KillSprite(Weapon);
+                    return(TRUE);
+                    }
+                break;
+                }
+            }
+
+        if (WeaponMoveHit(Weapon))
+            {
+            SpawnBoltExp(Weapon);
+            KillSprite(Weapon);
+            return(TRUE);
+            }
+        }
+
+    return(FALSE);
     }
 
 int
@@ -11334,17 +11569,21 @@ SpawnFireballFlames(SHORT SpriteNum, SHORT enemy)
     {
     SPRITEp sp = &sprite[SpriteNum];
     USERp u = User[SpriteNum];
-    SPRITEp ep = &sprite[enemy];
+    SPRITEp ep = NULL;
     USERp eu = NULL;
     SPRITEp np;
     USERp nu;
     short new;
+
+    if (!u)
+        return(-1);
 
     if (TEST(u->Flags, SPR_UNDERWATER))
         return(-1);
 
     if (enemy >= 0)
         {
+			ep = &sprite[enemy];
         eu = User[enemy];
 
         // test for already burned
@@ -11352,9 +11591,7 @@ SpawnFireballFlames(SHORT SpriteNum, SHORT enemy)
             return(-1);
 
         if (!eu)
-            {
-            ASSERT(TRUE == FALSE);
-            }
+            return(-1);
 
         if (eu->flame >= 0)
             {
@@ -15945,6 +16182,135 @@ InitRail(PLAYERp pp)
     wu->zchange = zvel;
 
     return (0);
+    }
+
+static STATE s_ShrinkRayBolt[] =
+    {
+    {BOLT_THINMAN_R0 + 0, BOLT_THINMAN_RATE, DoBoltShrapnel, &s_ShrinkRayBolt[0]}
+    };
+
+static STATE s_IceCrystalBolt[] =
+    {
+    {BOLT_THINMAN_R0 + 0, BOLT_THINMAN_RATE, DoBoltFatMan, &s_IceCrystalBolt[0]}
+    };
+
+int
+InitShrinkRay(PLAYERp pp)
+    {
+    USERp u = User[pp->PlayerSprite];
+    USERp wu;
+    SPRITEp wp;
+    int nx, ny, nz, zvel;
+    short w, oclipdist;
+
+    if (SW_SHAREWARE) return FALSE;
+
+    DoPlayerBeginRecoil(pp, RAIL_RECOIL_AMT / 2);
+    PlayerUpdateAmmo(pp, u->WeaponNum, -1);
+    PlaySound(DIGI_RAILFIRE, &pp->posx, &pp->posy, &pp->posz, v3df_dontpan|v3df_doppler);
+
+    nx = pp->posx;
+    ny = pp->posy;
+    nz = pp->posz + pp->bob_z + (TEST(pp->Flags2, PF2_SHRUNK) ? Z(4) : Z(11));
+
+    w = SpawnSprite(STAT_MISSILE, BOLT_THINMAN_R0, s_ShrinkRayBolt, pp->cursectnum,
+        nx, ny, nz, pp->pang, 1200);
+
+    wp = &sprite[w];
+    wu = User[w];
+
+    SetOwner(pp->PlayerSprite, w);
+    SET(wu->Flags2, SPR2_DONT_TARGET_OWNER);
+    wp->xrepeat = 32;
+    wp->yrepeat = 32;
+    wp->shade = -40;
+    wp->pal = wu->spal = PALETTE_GREEN_LIGHTING;
+    zvel = ((100 - pp->horiz) * (HORIZ_MULT + 17));
+
+    wu->WeaponNum = u->WeaponNum;
+    wu->Radius = 200;
+    wu->ceiling_dist = Z(1);
+    wu->floor_dist = Z(1);
+    SET(wp->cstat, CSTAT_SPRITE_YCENTER);
+    RESET(wp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+    wp->clipdist = 16L >> 2;
+
+    oclipdist = pp->SpriteP->clipdist;
+    pp->SpriteP->clipdist = 0;
+
+    wp->ang = NORM_ANGLE(wp->ang + 512);
+    HelpMissileLateral(w, 400);
+    wp->ang = NORM_ANGLE(wp->ang - 512);
+
+    pp->SpriteP->clipdist = oclipdist;
+
+    wp->zvel = zvel;
+    wu->xchange = MOVEx(wp->xvel, wp->ang);
+    wu->ychange = MOVEy(wp->xvel, wp->ang);
+    wu->zchange = zvel;
+
+    return(0);
+    }
+
+int
+InitIceCrystalGun(PLAYERp pp)
+    {
+    USERp u = User[pp->PlayerSprite];
+    USERp wu;
+    SPRITEp wp;
+    int nx, ny, nz, zvel;
+    short w, oclipdist;
+
+    if (SW_SHAREWARE) return FALSE;
+
+    DoPlayerBeginRecoil(pp, 8);
+    PlayerUpdateAmmo(pp, WPN_HEART, -1);
+    PlaySound(DIGI_SERPMAGICLAUNCH, &pp->posx, &pp->posy, &pp->posz, v3df_dontpan|v3df_doppler);
+
+    nx = pp->posx;
+    ny = pp->posy;
+    nz = pp->posz + pp->bob_z + (TEST(pp->Flags2, PF2_SHRUNK) ? Z(4) : Z(11));
+
+    w = SpawnSprite(STAT_MISSILE, BOLT_THINMAN_R0, s_IceCrystalBolt, pp->cursectnum,
+        nx, ny, nz, pp->pang, 1400);
+
+    wp = &sprite[w];
+    wu = User[w];
+
+    SetOwner(pp->PlayerSprite, w);
+    SET(wu->Flags2, SPR2_DONT_TARGET_OWNER);
+    wp->xrepeat = 40;
+    wp->yrepeat = 40;
+    wp->shade = -40;
+    wp->pal = wu->spal = PALETTE_BLUE_LIGHTING;
+    zvel = ((100 - pp->horiz) * (HORIZ_MULT + 20));
+
+    wu->WeaponNum = WPN_HEART;
+    wu->Radius = 200;
+    wu->ceiling_dist = Z(1);
+    wu->floor_dist = Z(1);
+    SET(wp->cstat, CSTAT_SPRITE_YCENTER);
+    RESET(wp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+    wp->clipdist = 16L >> 2;
+
+    oclipdist = pp->SpriteP->clipdist;
+    pp->SpriteP->clipdist = 0;
+
+    wp->ang = NORM_ANGLE(wp->ang + 512);
+    HelpMissileLateral(w, 400);
+    wp->ang = NORM_ANGLE(wp->ang - 512);
+
+    pp->SpriteP->clipdist = oclipdist;
+
+    wp->zvel = zvel;
+    if (WeaponAutoAim(pp->SpriteP, w, 32, FALSE) != -1)
+        zvel = wp->zvel;
+
+    wu->xchange = MOVEx(wp->xvel, wp->ang);
+    wu->ychange = MOVEy(wp->xvel, wp->ang);
+    wu->zchange = zvel;
+
+    return(0);
     }
 
 int

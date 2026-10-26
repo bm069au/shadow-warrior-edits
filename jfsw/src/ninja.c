@@ -2176,6 +2176,13 @@ PlayerLevelReset(PLAYERp pp)
     RESET(sp->cstat, CSTAT_SPRITE_TRANSLUCENT);
     RESET(pp->Flags, PF_WEAPON_DOWN|PF_WEAPON_RETRACT);
     RESET(pp->Flags, PF_DEAD);
+    RESET(pp->Flags2, PF2_FROZEN|PF2_SHRUNK|PF2_GRAPPLING);
+    pp->freeze_tics = 0;
+    pp->shrink_tics = 0;
+    sp->xrepeat = PLAYER_NINJA_XREPEAT;
+    sp->yrepeat = PLAYER_NINJA_YREPEAT;
+    sp->clipdist = (char)(256L >> 2);
+    sp->pal = u->spal;
 
     pp->sop_control = NULL;
     pp->sop_riding = NULL;
@@ -2206,6 +2213,10 @@ PlayerDeathReset(PLAYERp pp)
     pp->WpnUziType = 2;
     pp->WpnShotgunType = 0;            // Shotgun has normal or fully automatic fire
 	pp->WpnMineType = 0;                 // Standard sticky bomb
+    pp->WpnRailType = 0;
+    pp->WpnHeartType = 0;
+    pp->HasShrinkRay = 0;
+    pp->HasFreezeGun = 0;
     pp->WpnShotgunAuto = 0;            // 50-0 automatic shotgun rounds
     pp->WpnShotgunLastShell = 0;       // Number of last shell fired
     pp->Bloody = FALSE;
@@ -2245,6 +2256,13 @@ PlayerDeathReset(PLAYERp pp)
     RESET(sp->cstat, CSTAT_SPRITE_TRANSLUCENT);
     RESET(pp->Flags, PF_WEAPON_DOWN|PF_WEAPON_RETRACT);
     RESET(pp->Flags, PF_DEAD);
+    RESET(pp->Flags2, PF2_FROZEN|PF2_SHRUNK|PF2_GRAPPLING|PF2_HAS_GRAPPLE);
+    pp->freeze_tics = 0;
+    pp->shrink_tics = 0;
+    sp->xrepeat = PLAYER_NINJA_XREPEAT;
+    sp->yrepeat = PLAYER_NINJA_YREPEAT;
+    sp->clipdist = (char)(256L >> 2);
+    sp->pal = u->spal;
 
     pp->sop_control = NULL;
     pp->sop_riding = NULL;
@@ -2296,6 +2314,10 @@ PlayerGameReset(PLAYERp pp)
     pp->WpnUziType = 2;
     pp->WpnShotgunType = 0;            // Shotgun has normal or fully automatic fire
 	pp->WpnMineType = 0;                 // Standard sticky bomb
+    pp->WpnRailType = 0;
+    pp->WpnHeartType = 0;
+    pp->HasShrinkRay = 0;
+    pp->HasFreezeGun = 0;
     pp->WpnShotgunAuto = 0;            // 50-0 automatic shotgun rounds
     pp->WpnShotgunLastShell = 0;       // Number of last shell fired
     pp->Bloody = FALSE;
@@ -2315,6 +2337,13 @@ PlayerGameReset(PLAYERp pp)
     SET(pp->WpnFlags, BIT(WPN_STAR) | BIT(u->WeaponNum));
     RESET(pp->Flags, PF_PICKED_UP_AN_UZI);
     RESET(pp->Flags, PF_TWO_UZI);
+    RESET(pp->Flags2, PF2_FROZEN|PF2_SHRUNK|PF2_GRAPPLING|PF2_HAS_GRAPPLE);
+    pp->freeze_tics = 0;
+    pp->shrink_tics = 0;
+    sp->xrepeat = PLAYER_NINJA_XREPEAT;
+    sp->yrepeat = PLAYER_NINJA_YREPEAT;
+    sp->clipdist = (char)(256L >> 2);
+    sp->pal = u->spal;
     pp->MaxHealth = 100;
     PlayerUpdateHealth(pp, 500);
     pp->Armor = 0;

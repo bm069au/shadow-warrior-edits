@@ -136,7 +136,7 @@ DoPrediction(PLAYERp ppp)
     // get it out of sync
     RESET(ppp->input.bits,
         BIT(SK_SHOOT)|BIT(SK_OPERATE)|BIT(SK_INV_LEFT)|BIT(SK_INV_RIGHT)|
-        BIT(SK_INV_USE)|BIT(SK_HIDE_WEAPON)|
+        BIT(SK_GRAPPLE)|BIT(SK_INV_USE)|BIT(SK_HIDE_WEAPON)|
         BIT(SK_AUTO_AIM)|
         BIT(SK_CENTER_VIEW)|
         SK_WEAPON_MASK|
@@ -145,7 +145,7 @@ DoPrediction(PLAYERp ppp)
 
     SET(ppp->KeyPressFlags,
         BIT(SK_SHOOT)|BIT(SK_OPERATE)|BIT(SK_INV_LEFT)|BIT(SK_INV_RIGHT)|
-        BIT(SK_INV_USE)|BIT(SK_HIDE_WEAPON)|
+        BIT(SK_GRAPPLE)|BIT(SK_INV_USE)|BIT(SK_HIDE_WEAPON)|
         BIT(SK_AUTO_AIM)|
         BIT(SK_CENTER_VIEW)|
         SK_WEAPON_MASK|

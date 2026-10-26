@@ -281,6 +281,7 @@ extern char MessageOutputString[256];
 
     #define SK_INV_LEFT   26
     #define SK_INV_RIGHT  27
+    #define SK_GRAPPLE    28
 
     #define SK_INV_USE   29
     #define SK_HIDE_WEAPON  30
@@ -1274,6 +1275,13 @@ struct PLAYERstruct
     short Heads;                    // Number of Accursed Heads orbiting player
     int PlayerVersion;
     BOOL IsDisconnected;            // Is this player dropped from the game?
+    int grapple_x, grapple_y, grapple_z;
+    short grapple_sect, grapple_tics, grapple_stuck_tics;
+    short freeze_tics;
+    short shrink_tics;
+    unsigned char WpnHeartType;
+    unsigned char HasShrinkRay;
+    unsigned char HasFreezeGun;
     };
 
 extern PLAYER Player[MAX_SW_PLAYERS_REG+1];
@@ -1317,6 +1325,10 @@ extern PLAYER Player[MAX_SW_PLAYERS_REG+1];
 #define PF_WEAPON_DOWN       (BIT(31))
 
 #define PF2_TELEPORTED        (BIT(0))
+#define PF2_GRAPPLING         (BIT(1))
+#define PF2_FROZEN            (BIT(2))
+#define PF2_SHRUNK            (BIT(3))
+#define PF2_HAS_GRAPPLE       (BIT(4))
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //

@@ -689,7 +689,7 @@ KillSprite(SHORT SpriteNum)
     if (TEST(sp->extra, SPRX_PLAYER_OR_ENEMY))
         {
         USERp mu;
-        static short MissileStats[] = {STAT_MISSILE, STAT_MISSILE_SKIP4};
+        static short MissileStats[] = {STAT_MISSILE, STAT_MISSILE_SKIP4, STAT_MINE_STUCK};
 
         for (stat = 0; stat < SIZ(MissileStats); stat++)
         {
@@ -739,9 +739,17 @@ KillSprite(SHORT SpriteNum)
              }
         }
 
+    if (u->ID == FIREBALL_FLAMES && u->Attach >= 0 && User[u->Attach])
+        {
+        if (User[u->Attach]->flame == SpriteNum)
+            User[u->Attach]->flame = -1;
+        }
+
     if (u->flame >= 0)
         {
-        SetSuicide(u->flame);
+        if (User[u->flame])
+            SetSuicide(u->flame);
+        u->flame = -1;
         }
 
     if (u->rotator)
@@ -5279,6 +5287,12 @@ KillGet(short SpriteNum)
 
     short new;
 
+    if (sp->sectnum >= 0 && sector[sp->sectnum].hitag == 9910)
+        {
+        extern void TriggerSecretCrusher(short sectnum);
+        TriggerSecretCrusher(sp->sectnum);
+        }
+
     switch (gNet.MultiGameType)
     {
     case MULTI_GAME_NONE:
@@ -5322,6 +5336,12 @@ KillGetAmmo(short SpriteNum)
     SPRITEp sp = User[SpriteNum]->SpriteP,np;
 
     short new;
+
+    if (sp->sectnum >= 0 && sector[sp->sectnum].hitag == 9910)
+        {
+        extern void TriggerSecretCrusher(short sectnum);
+        TriggerSecretCrusher(sp->sectnum);
+        }
 
     switch (gNet.MultiGameType)
     {
@@ -5374,6 +5394,12 @@ KillGetWeapon(short SpriteNum)
     SPRITEp sp = User[SpriteNum]->SpriteP,np;
 
     short new;
+
+    if (sp->sectnum >= 0 && sector[sp->sectnum].hitag == 9910)
+        {
+        extern void TriggerSecretCrusher(short sectnum);
+        TriggerSecretCrusher(sp->sectnum);
+        }
 
     switch (gNet.MultiGameType)
     {
@@ -5614,6 +5640,20 @@ DoGet(short SpriteNum)
         if (!can_see)
             {
             continue;
+            }
+
+        if (sp->hitag == 9901)
+            {
+            if (!TEST(pp->Flags2, PF2_HAS_GRAPPLE))
+                {
+                SET(pp->Flags2, PF2_HAS_GRAPPLE);
+                PutStringInfo(Player+pnum, "Grappling Hook! Press G to Grapple");
+                SetFadeAmt(pp, ITEMFLASHAMT, ITEMFLASHCLR);
+                if (pp == Player+myconnectindex)
+                    PlaySound(DIGI_BIGITEM, &sp->x, &sp->y, &sp->z, v3df_dontpan);
+                KillGetWeapon(SpriteNum);
+                }
+            break;
             }
 
         switch (u->ID)
@@ -6144,10 +6184,20 @@ DoGet(short SpriteNum)
 
             SET(pp->WpnGotOnceFlags, BIT(WPN_RAIL));
 
-            if (TEST(pp->WpnFlags, BIT(WPN_RAIL)) && pp->WpnAmmo[WPN_RAIL] >= DamageData[WPN_RAIL].max_ammo)
-                break;
-            //sprintf(ds,"Rail Gun");
-            PutStringInfo(Player+pnum, DamageData[WPN_RAIL].weapon_name);
+            if (sp->hitag == 9902 || sp->pal == PALETTE_GREEN_LIGHTING)
+                {
+                if (pp->HasShrinkRay && TEST(pp->WpnFlags, BIT(WPN_RAIL)) && pp->WpnAmmo[WPN_RAIL] >= DamageData[WPN_RAIL].max_ammo)
+                    break;
+                pp->HasShrinkRay = 1;
+                pp->WpnRailType = 1;
+                PutStringInfo(Player+pnum, "Shrink Ray! Shoot Mirrors to Shrink Yourself");
+                }
+            else
+                {
+                if (TEST(pp->WpnFlags, BIT(WPN_RAIL)) && pp->WpnAmmo[WPN_RAIL] >= DamageData[WPN_RAIL].max_ammo)
+                    break;
+                PutStringInfo(Player+pnum, DamageData[WPN_RAIL].weapon_name);
+                }
             PlayerUpdateAmmo(pp, WPN_RAIL, DamageData[WPN_RAIL].weapon_pickup);
             SetFadeAmt(pp,ITEMFLASHAMT,ITEMFLASHCLR);  // Flash blue on item pickup
             if (pp == Player+myconnectindex)
@@ -6164,9 +6214,17 @@ DoGet(short SpriteNum)
             //ChoosePlayerGetSound(pp);
             KillGetWeapon(SpriteNum);
             if (TEST(pp->WpnFlags, BIT(WPN_RAIL)))
+                {
+                if (sp->hitag == 9902 || sp->pal == PALETTE_GREEN_LIGHTING)
+                    {
+                    InitWeaponRail(pp);
+                    if (pp->Wpn[WPN_RAIL])
+                        pp->Wpn[WPN_RAIL]->pal = PALETTE_GREEN_LIGHTING;
+                    }
                 break;
+                }
             SET(pp->WpnFlags, BIT(WPN_RAIL));
-            if (User[pp->PlayerSprite]->WeaponNum > WPN_RAIL && User[pp->PlayerSprite]->WeaponNum != WPN_SWORD)
+            if (User[pp->PlayerSprite]->WeaponNum > WPN_RAIL && User[pp->PlayerSprite]->WeaponNum != WPN_SWORD && sp->hitag != 9902)
                 break;
             InitWeaponRail(pp);
             break;
@@ -6298,10 +6356,20 @@ DoGet(short SpriteNum)
 
             SET(pp->WpnGotOnceFlags, BIT(WPN_HEART));
 
-            if (TEST(pp->WpnFlags, BIT(WPN_HEART)) && pp->WpnAmmo[WPN_HEART] >= DamageData[WPN_HEART].max_ammo)
-                break;
-            //sprintf(ds,"Ripper Heart");
-            PutStringInfo(Player+pnum, DamageData[WPN_HEART].weapon_name);
+            if (sp->hitag == 9903 || sp->pal == PALETTE_BLUE_LIGHTING)
+                {
+                if (pp->HasFreezeGun && TEST(pp->WpnFlags, BIT(WPN_HEART)) && pp->WpnAmmo[WPN_HEART] >= DamageData[WPN_HEART].max_ammo)
+                    break;
+                pp->HasFreezeGun = 1;
+                pp->WpnHeartType = 1;
+                PutStringInfo(Player+pnum, "Ice Crystal Gun! Freezes Enemies for 10s");
+                }
+            else
+                {
+                if (TEST(pp->WpnFlags, BIT(WPN_HEART)) && pp->WpnAmmo[WPN_HEART] >= DamageData[WPN_HEART].max_ammo)
+                    break;
+                PutStringInfo(Player+pnum, DamageData[WPN_HEART].weapon_name);
+                }
             PlayerUpdateAmmo(pp, WPN_HEART, DamageData[WPN_HEART].weapon_pickup);
             SetFadeAmt(pp,ITEMFLASHAMT,ITEMFLASHCLR);  // Flash blue on item pickup
             if (pp == Player+myconnectindex)
@@ -6312,10 +6380,18 @@ DoGet(short SpriteNum)
                      v3df_dontpan|v3df_doppler|v3df_follow,pp);
             KillGetWeapon(SpriteNum);
             if (TEST(pp->WpnFlags, BIT(WPN_HEART)))
+                {
+                if (sp->hitag == 9903 || sp->pal == PALETTE_BLUE_LIGHTING)
+                    {
+                    InitWeaponHeart(pp);
+                    if (pp->Wpn[WPN_HEART])
+                        pp->Wpn[WPN_HEART]->pal = PALETTE_BLUE_LIGHTING;
+                    }
                 break;
+                }
             SET(pp->WpnFlags, BIT(WPN_HEART));
 
-            if(User[pp->PlayerSprite]->WeaponNum > WPN_HEART && User[pp->PlayerSprite]->WeaponNum != WPN_SWORD)
+            if(User[pp->PlayerSprite]->WeaponNum > WPN_HEART && User[pp->PlayerSprite]->WeaponNum != WPN_SWORD && sp->hitag != 9903)
                 break;
 
             InitWeaponHeart(pp);
@@ -7303,10 +7379,15 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
     // this case is currently treated like it hit a sector
 
     // test for hitting ceiling or floor
-    if (daz - zh <= u->hiz + ceildist)
+    // Allow missiles/grenades to arc above open parallax sky ceilings (roofs/holes)
+    if (daz - zh <= ((TEST(sector[sp->sectnum].ceilingstat, CEILING_STAT_PLAX) &&
+                      sector[sp->sectnum].ceilingpicnum != FAF_MIRROR_PIC &&
+                      !u->hi_sp) ? (u->hiz - Z(256)) : (u->hiz + ceildist)))
         {
         // normal code
-        sp->z = u->hiz + zh + ceildist;
+        sp->z = ((TEST(sector[sp->sectnum].ceilingstat, CEILING_STAT_PLAX) &&
+                  sector[sp->sectnum].ceilingpicnum != FAF_MIRROR_PIC &&
+                  !u->hi_sp) ? (u->hiz - Z(256)) : (u->hiz + ceildist)) + zh;
         if (retval == 0)
             retval = dasectnum|HIT_SECTOR;
         }
@@ -7347,7 +7428,8 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
 
     if (retval && TEST(sector[sp->sectnum].ceilingstat, CEILING_STAT_PLAX))
         {
-        if (sp->z < sector[sp->sectnum].ceilingz)
+        if ((TEST(retval, HIT_MASK) == HIT_WALL && wall[NORM_WALL(retval)].nextsector < 0 && sp->z < sector[sp->sectnum].ceilingz) ||
+            (TEST(retval, HIT_MASK) == HIT_SECTOR && sp->z <= sector[sp->sectnum].ceilingz - Z(250)))
             {
             RESET(retval, HIT_WALL|HIT_SECTOR);
             SET(retval, HIT_PLAX_WALL);

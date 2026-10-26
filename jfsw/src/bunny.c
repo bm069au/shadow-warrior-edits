@@ -137,7 +137,7 @@ ATTRIBUTE BunnyAttrib =
 
 ATTRIBUTE WhiteBunnyAttrib =
     {
-{200, 220, 340, 380},               // Original killer-rabbit speeds
+{185, 205, 315, 350},               // Boss rabbit speeds reduced by about 7 percent
     {5, 0, -2, -4},                     // Tic Adjusts
     3,                                  // MaxWeapons;
     {DIGI_BUNNYAMBIENT, 0, DIGI_BUNNYATTACK,

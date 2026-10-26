@@ -2972,6 +2972,9 @@ void MoveLoop(void)
 
         domovethings();
 
+        if (ExitLevel)
+            break;
+
         #if DEBUG
         //if (DemoSyncRecord)
         //    demosync_record();
@@ -3412,6 +3415,8 @@ int app_main(int argc, char const * const argv[])
         // the OSX app bundle, or on Windows the directory where the EXE was launched
         if (appdir) {
             addsearchpath(appdir);
+            Bsnprintf(dirpath, sizeof(dirpath), "%s/maps_grapple_shrink", appdir);
+            addsearchpath(dirpath);
             free(appdir);
         }
 
@@ -3453,7 +3458,10 @@ int app_main(int argc, char const * const argv[])
                 }
             }
             if (asperr == 0) {
+                char vmapdir[BMAX_PATH+1];
                 chdir(dirpath);
+                Bsnprintf(vmapdir, sizeof(vmapdir), "%s/maps_grapple_shrink", dirpath);
+                addsearchpath(vmapdir);
             }
             free(supportdir);
         }
@@ -5433,6 +5441,7 @@ getinput(SW_PACKET *loc)
 
     SET_LOC_KEY(loc->bits, SK_INV_LEFT, BUTTON(gamefunc_Inventory_Left));
     SET_LOC_KEY(loc->bits, SK_INV_RIGHT, BUTTON(gamefunc_Inventory_Right));
+    SET_LOC_KEY(loc->bits, SK_GRAPPLE, KEY_PRESSED(KEYSC_G));
 
     SET_LOC_KEY(loc->bits, SK_HIDE_WEAPON, BUTTON(gamefunc_Holster_Weapon));
 

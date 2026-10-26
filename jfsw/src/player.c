@@ -193,6 +193,9 @@ VOID DoPlayerBeginJump(PLAYERp pp);
 VOID DoPlayerForceJump(PLAYERp pp);
 VOID DoPlayerBeginFly(PLAYERp pp);
 VOID DoPlayerFly(PLAYERp pp);
+BOOL PlayerTryGrapple(PLAYERp pp);
+VOID DoPlayerBeginGrapple(PLAYERp pp);
+VOID DoPlayerGrapple(PLAYERp pp);
 VOID DoPlayerBeginClimb(PLAYERp pp);
 VOID DoPlayerClimb(PLAYERp pp);
 VOID DoPlayerBeginDie(PLAYERp pp);
@@ -1533,8 +1536,9 @@ VOID
 DoPlayerHeight(PLAYERp pp)
     {
     int diff;
+    int target_h = TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT;
 
-    diff = pp->posz - (pp->loz - PLAYER_HEIGHT);
+    diff = pp->posz - (pp->loz - target_h);
 
     pp->posz = pp->posz - (DIV4(diff) + DIV8(diff));
     }
@@ -1542,11 +1546,12 @@ DoPlayerHeight(PLAYERp pp)
 VOID
 DoPlayerJumpHeight(PLAYERp pp)
     {
+    int target_h = TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT;
     if (pp->lo_sectp && TEST(pp->lo_sectp->extra, SECTFX_DYNAMIC_AREA))
         {
-        if (pp->posz + PLAYER_HEIGHT > pp->loz)
+        if (pp->posz + target_h > pp->loz)
             {
-            pp->posz = pp->loz - PLAYER_HEIGHT;
+            pp->posz = pp->loz - target_h;
             DoPlayerBeginRun(pp);
             }
         }
@@ -2238,14 +2243,14 @@ UpdatePlayerSprite(PLAYERp pp)
         DoPlayerSpriteBob(pp, PLAYER_HEIGHT, Z(6), 3);
         changespritesect(pp->PlayerSprite, pp->cursectnum);
         }
-    else if (pp->DoPlayerAction == DoPlayerJump || pp->DoPlayerAction == DoPlayerFall || pp->DoPlayerAction == DoPlayerForceJump)
+    else if (pp->DoPlayerAction == DoPlayerJump || pp->DoPlayerAction == DoPlayerFall || pp->DoPlayerAction == DoPlayerForceJump || pp->DoPlayerAction == DoPlayerGrapple)
         {
-        sp->z = pp->posz + PLAYER_HEIGHT;
+        sp->z = pp->posz + (TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT);
         changespritesect(pp->PlayerSprite, pp->cursectnum);
         }
     else if (pp->DoPlayerAction == DoPlayerTeleportPause)
         {
-        sp->z = pp->posz + PLAYER_HEIGHT;
+        sp->z = pp->posz + (TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT);
         changespritesect(pp->PlayerSprite, pp->cursectnum);
         }
     else
@@ -2646,7 +2651,9 @@ DoPlayerMove(PLAYERp pp)
         }
     else
         {
-        push_ret = pushmove(&pp->posx, &pp->posy, &pp->posz, &pp->cursectnum, ((int)pp->SpriteP->clipdist<<2), pp->ceiling_dist, pp->floor_dist - Z(16), CLIPMASK_PLAYER);
+        {
+        int push_floor = TEST(pp->Flags2, PF2_SHRUNK) ? pp->floor_dist : (pp->floor_dist - Z(16));
+        push_ret = pushmove(&pp->posx, &pp->posy, &pp->posz, &pp->cursectnum, ((int)pp->SpriteP->clipdist<<2), pp->ceiling_dist, push_floor, CLIPMASK_PLAYER);
 
         if (push_ret < 0)
             {
@@ -2667,7 +2674,8 @@ DoPlayerMove(PLAYERp pp)
         pp->SpriteP->cstat = save_cstat;
         PlayerCheckValidMove(pp);
 
-        push_ret = pushmove(&pp->posx, &pp->posy, &pp->posz, &pp->cursectnum, ((int)pp->SpriteP->clipdist<<2), pp->ceiling_dist, pp->floor_dist - Z(16), CLIPMASK_PLAYER);
+        push_ret = pushmove(&pp->posx, &pp->posy, &pp->posz, &pp->cursectnum, ((int)pp->SpriteP->clipdist<<2), pp->ceiling_dist, push_floor, CLIPMASK_PLAYER);
+        }
         if (push_ret < 0)
             {
 
@@ -3566,6 +3574,9 @@ DoPlayerJump(PLAYERp pp)
             }
         }
 
+    if (PlayerTryGrapple(pp))
+        return;
+
     if (PlayerFlyKey(pp))
         {
         DoPlayerBeginFly(pp);
@@ -3732,7 +3743,7 @@ DoPlayerFall(PLAYERp pp)
             // hit floor
             }
 
-        if (PlayerFloorHit(pp, pp->loz - PLAYER_HEIGHT + recoil_amt))
+        if (PlayerFloorHit(pp, pp->loz - (TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT) + recoil_amt))
             {
             SECT_USERp sectu = SectUser[pp->cursectnum];
             SECTORp sectp = &sector[pp->cursectnum];
@@ -3819,6 +3830,9 @@ DoPlayerFall(PLAYERp pp)
             return;
             }
         }
+
+    if (PlayerTryGrapple(pp))
+        return;
 
     if (PlayerFlyKey(pp))
         {
@@ -4494,6 +4508,282 @@ DoPlayerFly(PLAYERp pp)
     DoPlayerMove(pp);
     }
 
+static VOID
+SpawnGrapplePuff(short sectnum, int x, int y, int z)
+    {
+    extern STATE s_Puff[];
+    short spnum;
+    SPRITEp sp;
+
+    if (Prediction || sectnum < 0)
+        return;
+
+    spnum = SpawnSprite(STAT_MISSILE, PUFF, s_Puff, sectnum, x, y, z, 0, 0);
+    if (spnum >= 0)
+        {
+        sp = &sprite[spnum];
+        sp->xrepeat = 20;
+        sp->yrepeat = 20;
+        sp->shade = -24;
+        SET(sp->cstat, CSTAT_SPRITE_YCENTER | CSTAT_SPRITE_TRANSLUCENT);
+        RESET(sp->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+        }
+    }
+
+BOOL
+PlayerTryGrapple(PLAYERp pp)
+    {
+    short hitsect = -1, hitwall = -1, hitsprite = -1, daang;
+    int hitx, hity, hitz, daz, dist, cz, fz, target_z;
+
+    if (Prediction || InputMode || TEST(pp->Flags, PF_DEAD))
+        return(FALSE);
+
+    if (TEST_SYNC_KEY(pp, SK_GRAPPLE))
+        {
+        if (!FLAG_KEY_PRESSED(pp, SK_GRAPPLE))
+            return(FALSE);
+
+        FLAG_KEY_RELEASE(pp, SK_GRAPPLE);
+
+        if (!TEST(pp->Flags2, PF2_HAS_GRAPPLE) && !GodMode)
+            {
+            PutStringInfo(pp, "Find the Grappling Hook!");
+            return(FALSE);
+            }
+
+        daang = pp->pang;
+        daz = (100 - pp->horiz) * 2000;
+
+        FAFhitscan(pp->posx, pp->posy, pp->posz, pp->cursectnum,
+            sintable[NORM_ANGLE(daang + 512)],
+            sintable[NORM_ANGLE(daang)],
+            daz,
+            &hitsect, &hitwall, &hitsprite, &hitx, &hity, &hitz, CLIPMASK_MISSILE);
+
+        if (hitsect < 0)
+            return(FALSE);
+
+        // Reject open parallax sky ceilings/floors
+        if (hitwall < 0 && hitsprite < 0)
+            {
+            if (hitz <= sector[hitsect].ceilingz && TEST(sector[hitsect].ceilingstat, CEILING_STAT_PLAX))
+                return(FALSE);
+            if (hitz >= sector[hitsect].floorz && TEST(sector[hitsect].floorstat, FLOOR_STAT_PLAX))
+                return(FALSE);
+            }
+        else if (hitwall >= 0 && wall[hitwall].nextsector >= 0)
+            {
+            short nsect = wall[hitwall].nextsector;
+            if (hitz <= sector[nsect].ceilingz &&
+                TEST(sector[hitsect].ceilingstat, CEILING_STAT_PLAX) &&
+                TEST(sector[nsect].ceilingstat, CEILING_STAT_PLAX))
+                return(FALSE);
+            }
+
+        dist = FindDistance3D(hitx - pp->posx, hity - pp->posy, (hitz - pp->posz) >> 4);
+        if (dist < 192 || dist > 14336)
+            return(FALSE);
+
+        getzsofslope(hitsect, hitx, hity, &cz, &fz);
+        target_z = hitz;
+
+        // If hitting a wall right below or at an open sector ledge/window, aim for the opening floor height
+        if (hitwall >= 0 && wall[hitwall].nextsector >= 0)
+            {
+            short nsect = wall[hitwall].nextsector;
+            int ncz, nfz;
+            getzsofslope(nsect, hitx, hity, &ncz, &nfz);
+            if (nfz - ncz >= PLAYER_MIN_HEIGHT && target_z > nfz - PLAYER_HEIGHT)
+                target_z = nfz - PLAYER_HEIGHT;
+            }
+
+        if (target_z > fz - PLAYER_HEIGHT)
+            target_z = fz - PLAYER_HEIGHT;
+        if (target_z < cz + Z(10))
+            target_z = cz + Z(10);
+
+        pp->grapple_x = hitx;
+        pp->grapple_y = hity;
+        pp->grapple_z = target_z;
+        pp->grapple_sect = hitsect;
+        pp->grapple_tics = 0;
+        pp->grapple_stuck_tics = 0;
+
+        SpawnGrapplePuff(hitsect, hitx, hity, hitz);
+        DoPlayerBeginGrapple(pp);
+        return(TRUE);
+        }
+    else
+        {
+        FLAG_KEY_RESET(pp, SK_GRAPPLE);
+        }
+
+    return(FALSE);
+    }
+
+VOID
+DoPlayerBeginGrapple(PLAYERp pp)
+    {
+    RESET(pp->Flags, PF_FALLING | PF_JUMPING | PF_CRAWLING | PF_FLYING | PF_CLIMBING);
+    SET(pp->Flags2, PF2_GRAPPLING);
+
+    pp->friction = PLAYER_FLY_FRICTION;
+    pp->floor_dist = Z(8);
+    pp->ceiling_dist = Z(8);
+    pp->DoPlayerAction = DoPlayerGrapple;
+
+    pp->z_speed = 0;
+    pp->jump_speed = 0;
+    pp->bob_amt = 0;
+    pp->bob_ndx = 0;
+
+    if (!Prediction)
+        {
+        PlaySound(DIGI_STAR, &pp->posx, &pp->posy, &pp->posz, v3df_dontpan | v3df_doppler);
+        PlaySound(DIGI_STARCLINK, &pp->grapple_x, &pp->grapple_y, &pp->grapple_z, v3df_none);
+        }
+
+    NewStateGroup(pp->PlayerSprite, sg_PlayerNinjaFly);
+    }
+
+static VOID
+FinishPlayerGrapple(PLAYERp pp, BOOL hop_boost)
+    {
+    RESET(pp->Flags2, PF2_GRAPPLING);
+    pp->floor_dist = PLAYER_RUN_FLOOR_DIST;
+    pp->ceiling_dist = PLAYER_RUN_CEILING_DIST;
+    pp->bob_amt = 0;
+    pp->bob_ndx = 0;
+
+    DoPlayerZrange(pp);
+    if (!hop_boost && labs(pp->posz + PLAYER_HEIGHT - pp->loz) <= Z(16))
+        {
+        pp->posz = pp->loz - PLAYER_HEIGHT;
+        DoPlayerBeginRun(pp);
+        }
+    else
+        {
+        DoPlayerBeginJump(pp);
+        pp->jump_speed = hop_boost ? -700 : -350;
+        }
+    }
+
+VOID
+DoPlayerGrapple(PLAYERp pp)
+    {
+    int dx, dy, dz, dist2d, dist3d, pull_vel, z_step;
+    short pull_ang;
+
+    if (SectorIsUnderwaterArea(pp->cursectnum))
+        {
+        RESET(pp->Flags2, PF2_GRAPPLING);
+        DoPlayerBeginDiveNoWarp(pp);
+        return;
+        }
+
+    // Allow manual detach with G or Jump (Jump gives upward ledge vault hop)
+    if (TEST_SYNC_KEY(pp, SK_GRAPPLE))
+        {
+        if (FLAG_KEY_PRESSED(pp, SK_GRAPPLE))
+            {
+            FLAG_KEY_RELEASE(pp, SK_GRAPPLE);
+            FinishPlayerGrapple(pp, FALSE);
+            return;
+            }
+        }
+    else
+        {
+        FLAG_KEY_RESET(pp, SK_GRAPPLE);
+        }
+
+    if (TEST_SYNC_KEY(pp, SK_JUMP))
+        {
+        if (FLAG_KEY_PRESSED(pp, SK_JUMP))
+            {
+            FLAG_KEY_RELEASE(pp, SK_JUMP);
+            FinishPlayerGrapple(pp, TRUE);
+            return;
+            }
+        }
+    else
+        {
+        FLAG_KEY_RESET(pp, SK_JUMP);
+        }
+
+    pp->grapple_tics += synctics;
+
+    dx = pp->grapple_x - pp->posx;
+    dy = pp->grapple_y - pp->posy;
+    dz = pp->grapple_z - pp->posz;
+    dist2d = FindDistance2D(dx, dy);
+    dist3d = FindDistance3D(dx, dy, dz >> 4);
+
+    if (dist3d < 224 || pp->grapple_tics > 120 * 4)
+        {
+        FinishPlayerGrapple(pp, FALSE);
+        return;
+        }
+
+    pull_ang = getangle(dx, dy);
+    pull_vel = min(dist2d, 96 * (int)synctics);
+    pp->xvect = pull_vel * sintable[NORM_ANGLE(pull_ang + 512)];
+    pp->yvect = pull_vel * sintable[NORM_ANGLE(pull_ang)];
+
+    z_step = Z(2) * (int)synctics;
+    if (dist2d > 64)
+        {
+        int prop_z = klabs((dz * pull_vel) / dist2d) + Z(1) * (int)synctics;
+        if (prop_z > z_step)
+            z_step = prop_z;
+        }
+
+    if (dz < 0)
+        pp->posz -= min(-dz, z_step);
+    else if (dz > 0)
+        pp->posz += min(dz, z_step);
+
+    if (PlayerCeilingHit(pp, pp->hiz + Z(8)))
+        pp->posz = pp->hiz + Z(8);
+    if (PlayerFloorHit(pp, pp->loz - PLAYER_HEIGHT))
+        pp->posz = pp->loz - PLAYER_HEIGHT;
+
+    if (!Prediction && (pp->grapple_tics & 7) < synctics)
+        {
+        SpawnGrapplePuff(pp->cursectnum,
+            pp->posx + (dx >> 1),
+            pp->posy + (dy >> 1),
+            pp->posz + (dz >> 1));
+        }
+
+    DoPlayerMove(pp);
+
+    // Ledge/window sill vault assist: if horizontal movement hits a wall below an opening, climb vertically
+    if (FindDistance2D(pp->posx - pp->oldposx, pp->posy - pp->oldposy) < 12 * (int)synctics && dist2d > 160)
+        {
+        if (pp->posz > pp->grapple_z + Z(4))
+            {
+            pp->posz -= Z(3) * (int)synctics;
+            if (PlayerCeilingHit(pp, pp->hiz + Z(8)))
+                pp->posz = pp->hiz + Z(8);
+            }
+        }
+
+    if (FindDistance3D(pp->posx - pp->oldposx, pp->posy - pp->oldposy, (pp->posz - pp->oldposz) >> 4) < 8 * (int)synctics)
+        {
+        pp->grapple_stuck_tics += synctics;
+        if (pp->grapple_stuck_tics > 32)
+            {
+            FinishPlayerGrapple(pp, TRUE);
+            return;
+            }
+        }
+    else
+        {
+        pp->grapple_stuck_tics = 0;
+        }
+    }
+
 
 SPRITEp
 FindNearSprite(SPRITEp sp, short stat)
@@ -4628,6 +4918,9 @@ PlayerOnLadder(PLAYERp pp)
 
 BOOL DoPlayerTestCrawl(PLAYERp pp)
     {
+    if (TEST(pp->Flags2, PF2_SHRUNK))
+        return(FALSE);
+
     if (labs(pp->loz - pp->hiz) < PLAYER_STANDING_ROOM)
         return(TRUE);
 
@@ -5654,6 +5947,9 @@ DoPlayerWade(PLAYERp pp)
         FLAG_KEY_RESET(pp, SK_JUMP);
         }
 
+    if (PlayerTryGrapple(pp))
+        return;
+
     if (PlayerFlyKey(pp))
         {
         //pp->InventoryTics[INVENTORY_FLY] = -99;
@@ -6531,6 +6827,24 @@ DoPlayerBeginDie(PLAYERp pp)
         pp->DeathType = PLAYER_DEATH_DROWN;
 
     RESET(pp->Flags, PF_JUMPING|PF_FALLING|PF_DIVING|PF_FLYING|PF_CLIMBING|PF_CRAWLING|PF_LOCK_CRAWL);
+    if (TEST(pp->Flags2, PF2_FROZEN))
+        {
+        RESET(pp->Flags2, PF2_FROZEN);
+        pp->freeze_tics = 0;
+        if (pp->SpriteP && User[pp->PlayerSprite])
+            pp->SpriteP->pal = User[pp->PlayerSprite]->spal;
+        }
+    if (TEST(pp->Flags2, PF2_SHRUNK))
+        {
+        RESET(pp->Flags2, PF2_SHRUNK);
+        pp->shrink_tics = 0;
+        if (pp->SpriteP)
+            {
+            pp->SpriteP->xrepeat = PLAYER_NINJA_XREPEAT;
+            pp->SpriteP->yrepeat = PLAYER_NINJA_YREPEAT;
+            pp->SpriteP->clipdist = (char)(256L >> 2);
+            }
+        }
 
     #if 0
     // get tilt value
@@ -6884,6 +7198,10 @@ VOID DoPlayerDeathCheckKeys(PLAYERp pp)
 
         RESET(pp->Flags, PF_WEAPON_DOWN|PF_WEAPON_RETRACT);
         RESET(pp->Flags, PF_DEAD);
+        RESET(pp->Flags2, PF2_FROZEN);
+        pp->freeze_tics = 0;
+        if (User[pp->PlayerSprite])
+            sp->pal = User[pp->PlayerSprite]->spal;
         RESET(pp->Flags, PF_LOCK_HORIZ);
         RESET(sp->cstat, CSTAT_SPRITE_YCENTER);
         SET(sp->cstat, CSTAT_SPRITE_BLOCK|CSTAT_SPRITE_BLOCK_HITSCAN);
@@ -7323,8 +7641,16 @@ DoPlayerBeginRun(PLAYERp pp)
         }
 
     pp->friction = PLAYER_RUN_FRICTION;
-    pp->floor_dist = PLAYER_RUN_FLOOR_DIST;
-    pp->ceiling_dist = PLAYER_RUN_CEILING_DIST;
+    if (TEST(pp->Flags2, PF2_SHRUNK))
+        {
+        pp->floor_dist = Z(6);
+        pp->ceiling_dist = Z(4);
+        }
+    else
+        {
+        pp->floor_dist = PLAYER_RUN_FLOOR_DIST;
+        pp->ceiling_dist = PLAYER_RUN_CEILING_DIST;
+        }
     pp->DoPlayerAction = DoPlayerRun;
 
     ///DamageData[u->WeaponNum].Init(pp);
@@ -7374,7 +7700,7 @@ DoPlayerRun(PLAYERp pp)
             //DoPlayerHeight(pp);
             //DoPlayerHeight(pp);
             //DoPlayerHeight(pp);
-            pp->posz = pp->loz - PLAYER_HEIGHT;
+            pp->posz = pp->loz - (TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT);
             DoPlayerBeginJump(pp);
             return;
             }
@@ -7400,6 +7726,9 @@ DoPlayerRun(PLAYERp pp)
         {
         FLAG_KEY_RESET(pp, SK_CRAWL_LOCK);
         }
+
+    if (PlayerTryGrapple(pp))
+        return;
 
     if (PlayerFlyKey(pp))
         {
@@ -7480,7 +7809,7 @@ DoPlayerRun(PLAYERp pp)
         }
 
     // If the floor is far below you, fall hard instead of adjusting height
-    if (PlayerFallTest(pp, PLAYER_HEIGHT))
+    if (PlayerFallTest(pp, TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT))
         {
         pp->jump_speed = Z(1);
         DoPlayerBeginFall(pp);
@@ -7491,7 +7820,7 @@ DoPlayerRun(PLAYERp pp)
 
     if (TEST(sector[pp->cursectnum].extra, SECTFX_DYNAMIC_AREA))
         {
-        pp->posz = pp->loz - PLAYER_HEIGHT;
+        pp->posz = pp->loz - (TEST(pp->Flags2, PF2_SHRUNK) ? Z(14) : PLAYER_HEIGHT);
         }
 
     // Adjust height moving up and down sectors
@@ -7698,7 +8027,7 @@ VOID PlayerGlobal(PLAYERp pp)
                 min_height = PLAYER_MIN_HEIGHT;
             #else
             // just adjusted min height to something small to take care of all cases
-            min_height = PLAYER_MIN_HEIGHT;
+            min_height = TEST(pp->Flags2, PF2_SHRUNK) ? Z(10) : PLAYER_MIN_HEIGHT;
             #endif
 
             if (labs(pp->loz - pp->hiz) < min_height)
@@ -8054,7 +8383,86 @@ domovethings(VOID)
             Player[screenpeek].pang = getangle(Player[myconnectindex].posx - Player[screenpeek].posx, Player[myconnectindex].posy - Player[screenpeek].posy);
             }
 
-        if (!TEST(pp->Flags, PF_DEAD))
+        if (TEST(pp->Flags2, PF2_SHRUNK))
+            {
+            if (TEST(pp->Flags, PF_DEAD))
+                {
+                RESET(pp->Flags2, PF2_SHRUNK);
+                pp->shrink_tics = 0;
+                if (pp->SpriteP)
+                    {
+                    pp->SpriteP->xrepeat = PLAYER_NINJA_XREPEAT;
+                    pp->SpriteP->yrepeat = PLAYER_NINJA_YREPEAT;
+                    pp->SpriteP->clipdist = (char)(256L >> 2);
+                    }
+                }
+            else
+                {
+                pp->shrink_tics -= synctics;
+                if (pp->shrink_tics <= 0)
+                    {
+                    if (labs(pp->loz - pp->hiz) < Z(56))
+                        {
+                        // Still inside a low mouse-hole tunnel; stay shrunk until clear!
+                        pp->shrink_tics = 1;
+                        }
+                    else
+                        {
+                        RESET(pp->Flags2, PF2_SHRUNK);
+                        pp->shrink_tics = 0;
+                        if (pp->SpriteP)
+                            {
+                            pp->SpriteP->xrepeat = PLAYER_NINJA_XREPEAT;
+                            pp->SpriteP->yrepeat = PLAYER_NINJA_YREPEAT;
+                            pp->SpriteP->clipdist = (char)(256L >> 2);
+                            }
+                        pp->floor_dist = PLAYER_RUN_FLOOR_DIST;
+                        pp->ceiling_dist = PLAYER_RUN_CEILING_DIST;
+                        pp->posz = pp->loz - PLAYER_HEIGHT;
+                        }
+                    }
+
+                if (TEST(pp->Flags2, PF2_SHRUNK))
+                    {
+                    if (pp->SpriteP)
+                        {
+                        pp->SpriteP->xrepeat = 14;
+                        pp->SpriteP->yrepeat = 14;
+                        pp->SpriteP->clipdist = 16;
+                        }
+                    pp->floor_dist = Z(6);
+                    pp->ceiling_dist = Z(4);
+                    }
+                }
+            }
+
+        if (TEST(pp->Flags2, PF2_FROZEN))
+            {
+            if (TEST(pp->Flags, PF_DEAD) || (pp->freeze_tics -= synctics) <= 0)
+                {
+                RESET(pp->Flags2, PF2_FROZEN);
+                pp->freeze_tics = 0;
+                if (pp->SpriteP && User[pp->PlayerSprite])
+                    pp->SpriteP->pal = User[pp->PlayerSprite]->spal;
+                }
+            else
+                {
+                pp->input.vel = 0;
+                pp->input.svel = 0;
+                pp->input.angvel = 0;
+                pp->input.aimvel = 0;
+                RESET(pp->input.bits,
+                    BIT(SK_SHOOT)|BIT(SK_OPERATE)|BIT(SK_JUMP)|BIT(SK_CRAWL)|
+                    BIT(SK_GRAPPLE)|BIT(SK_TURN_180)|BIT(SK_INV_USE)|
+                    BIT(SK_HIDE_WEAPON)|BIT(SK_SPACE_BAR));
+                pp->xvect = 0;
+                pp->yvect = 0;
+                if (pp->SpriteP)
+                    pp->SpriteP->pal = PALETTE_BLUE_LIGHTING;
+                }
+            }
+
+        if (!TEST(pp->Flags, PF_DEAD) && !TEST(pp->Flags2, PF2_FROZEN))
             {
             #if DEBUG
             if (!DebugPanel)
@@ -8078,12 +8486,15 @@ domovethings(VOID)
 
         UpdatePlayerSprite(pp);
 
-        #if DEBUG
-        if (!DebugPanel)
-        #endif
-        pSpriteControl(pp);
+        if (!TEST(pp->Flags2, PF2_FROZEN))
+            {
+            #if DEBUG
+            if (!DebugPanel)
+            #endif
+            pSpriteControl(pp);
 
-        PlayerStateControl(pp->PlayerSprite);
+            PlayerStateControl(pp->PlayerSprite);
+            }
 
         DoPlayerSectorUpdatePostMove(pp);
         PlayerGlobal(pp);
@@ -8431,6 +8842,8 @@ static saveable_code saveable_player_code[] = {
 	SAVE_CODE(DoPlayerForceJump),
 	SAVE_CODE(DoPlayerBeginFly),
 	SAVE_CODE(DoPlayerFly),
+	SAVE_CODE(DoPlayerBeginGrapple),
+	SAVE_CODE(DoPlayerGrapple),
 	SAVE_CODE(DoPlayerBeginClimb),
 	SAVE_CODE(DoPlayerClimb),
 	SAVE_CODE(DoPlayerBeginDie),

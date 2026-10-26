@@ -491,6 +491,10 @@ SectorSetup(VOID)
         SectorObject[ndx].xmid = MAXLONG;
         }
 
+    {
+    extern void ResetSecretCrushers(void);
+    ResetSecretCrushers();
+    }
     memset(SineWaveFloor, -1, sizeof(SineWaveFloor));
     memset(SpringBoard, -1, sizeof(SpringBoard));
 
@@ -3498,6 +3502,145 @@ DoSector(VOID)
     DoSineWaveFloor();
     DoSineWaveWall();
     DoSpringBoardDown();
+    {
+    extern void DoSecretCrushers(void);
+    DoSecretCrushers();
+    }
+    }
+
+#define MAX_SECRET_CRUSHERS 16
+typedef struct
+    {
+    short sectnum;
+    short state; // 0 = inactive, 1 = descending, 2 = holding, 3 = rising
+    int orig_ceilingz;
+    int tics;
+    } SECRET_CRUSHER;
+
+static SECRET_CRUSHER SecretCrushers[MAX_SECRET_CRUSHERS];
+
+void
+ResetSecretCrushers(void)
+    {
+    int i;
+    for (i = 0; i < MAX_SECRET_CRUSHERS; i++)
+        {
+        SecretCrushers[i].sectnum = -1;
+        SecretCrushers[i].state = 0;
+        SecretCrushers[i].orig_ceilingz = 0;
+        SecretCrushers[i].tics = 0;
+        }
+    }
+
+void
+TriggerSecretCrusher(short sectnum)
+    {
+    int i, slot = -1;
+
+    if (sectnum < 0 || sectnum >= numsectors)
+        return;
+
+    for (i = 0; i < MAX_SECRET_CRUSHERS; i++)
+        {
+        if (SecretCrushers[i].sectnum == sectnum)
+            {
+            if (SecretCrushers[i].state == 0)
+                {
+                SecretCrushers[i].state = 1;
+                SecretCrushers[i].tics = 0;
+                PlaySound(DIGI_PLAYER_TELEPORT, &wall[sector[sectnum].wallptr].x, &wall[sector[sectnum].wallptr].y, &sector[sectnum].ceilingz, v3df_none);
+                }
+            return;
+            }
+        if (slot < 0 && SecretCrushers[i].sectnum < 0)
+            slot = i;
+        }
+
+    if (slot >= 0)
+        {
+        SecretCrushers[slot].sectnum = sectnum;
+        SecretCrushers[slot].orig_ceilingz = sector[sectnum].ceilingz;
+        SecretCrushers[slot].state = 1;
+        SecretCrushers[slot].tics = 0;
+        PlaySound(DIGI_PLAYER_TELEPORT, &wall[sector[sectnum].wallptr].x, &wall[sector[sectnum].wallptr].y, &sector[sectnum].ceilingz, v3df_none);
+        }
+    }
+
+void
+DoSecretCrushers(void)
+    {
+    int i;
+    short pnum;
+
+    for (i = 0; i < MAX_SECRET_CRUSHERS; i++)
+        {
+        short s = SecretCrushers[i].sectnum;
+        int orig_cz, fz, dist;
+
+        if (s < 0 || SecretCrushers[i].state == 0)
+            continue;
+
+        orig_cz = SecretCrushers[i].orig_ceilingz;
+        fz = sector[s].floorz;
+        dist = fz - orig_cz;
+
+        if (SecretCrushers[i].state == 1)
+            {
+            // Descend over exactly 10 seconds (SEC(10) = 1200 synctics)
+            SecretCrushers[i].tics += synctics;
+            if (SecretCrushers[i].tics >= SEC(10))
+                {
+                SecretCrushers[i].tics = SEC(10);
+                sector[s].ceilingz = fz;
+                SecretCrushers[i].state = 2;
+                SecretCrushers[i].tics = 0;
+                }
+            else
+                {
+                sector[s].ceilingz = orig_cz + scale(dist, SecretCrushers[i].tics, SEC(10));
+                }
+
+            // Crush any living player still in the sector when gap < Z(18)
+            if (fz - sector[s].ceilingz < Z(18))
+                {
+                TRAVERSE_CONNECT(pnum)
+                    {
+                    PLAYERp pp = &Player[pnum];
+                    if (pp->cursectnum == s && !TEST(pp->Flags, PF_DEAD) && User[pp->PlayerSprite])
+                        {
+                        pp->DeathType = PLAYER_DEATH_SQUISH;
+                        PlayerUpdateHealth(pp, -(User[pp->PlayerSprite]->Health + 500));
+                        PlayerCheckDeath(pp, -1);
+                        }
+                    }
+                }
+            }
+        else if (SecretCrushers[i].state == 2)
+            {
+            // Hold at bottom for 2 seconds (SEC(2) = 240 synctics)
+            SecretCrushers[i].tics += synctics;
+            if (SecretCrushers[i].tics >= SEC(2))
+                {
+                SecretCrushers[i].state = 3;
+                SecretCrushers[i].tics = 0;
+                }
+            }
+        else if (SecretCrushers[i].state == 3)
+            {
+            // Rise back to orig_ceilingz over 4 seconds (SEC(4) = 480 synctics)
+            SecretCrushers[i].tics += synctics;
+            if (SecretCrushers[i].tics >= SEC(4))
+                {
+                sector[s].ceilingz = orig_cz;
+                SecretCrushers[i].state = 0;
+                SecretCrushers[i].tics = 0;
+                }
+            else
+                {
+                sector[s].ceilingz = fz - scale(dist, SecretCrushers[i].tics, SEC(4));
+                }
+            }
+        }
     }
 
 #if 0
