@@ -9201,14 +9201,14 @@ int clipmove (int *x, int *y, int *z, short *sectnum,
 
 				sec2 = &sector[wal->nextsector];
 				if (daz2 < daz-(1<<8))
-					if ((sec2->floorstat&1) == 0)
+					if ((sec2->floorstat&1) == 0 && sec2->floorpicnum != 341 && sec->floorpicnum != 341)
 						if ((*z) >= daz2-(flordist-1)) clipyou = 1;
 				if (clipyou == 0)
 				{
 					daz = getceilzofslope((short)dasect,dax,day);
 					daz2 = getceilzofslope(wal->nextsector,dax,day);
 					if (daz2 > daz+(1<<8))
-						if ((sec2->ceilingstat&1) == 0)
+						if ((sec2->ceilingstat&1) == 0 && sec2->ceilingpicnum != 341 && sec->ceilingpicnum != 341)
 							if ((*z) <= daz2+(ceildist-1)) clipyou = 1;
 				}
 			}

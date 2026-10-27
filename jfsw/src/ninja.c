@@ -2179,6 +2179,8 @@ PlayerLevelReset(PLAYERp pp)
     RESET(pp->Flags2, PF2_FROZEN|PF2_SHRUNK|PF2_GRAPPLING);
     pp->freeze_tics = 0;
     pp->shrink_tics = 0;
+    pp->knee_tics = 0;
+    pp->WpnGrenadeType = 0;
     sp->xrepeat = PLAYER_NINJA_XREPEAT;
     sp->yrepeat = PLAYER_NINJA_YREPEAT;
     sp->clipdist = (char)(256L >> 2);
@@ -2215,6 +2217,7 @@ PlayerDeathReset(PLAYERp pp)
 	pp->WpnMineType = 0;                 // Standard sticky bomb
     pp->WpnRailType = 0;
     pp->WpnHeartType = 0;
+    pp->WpnGrenadeType = 0;
     pp->HasShrinkRay = 0;
     pp->HasFreezeGun = 0;
     pp->WpnShotgunAuto = 0;            // 50-0 automatic shotgun rounds
@@ -2259,6 +2262,8 @@ PlayerDeathReset(PLAYERp pp)
     RESET(pp->Flags2, PF2_FROZEN|PF2_SHRUNK|PF2_GRAPPLING|PF2_HAS_GRAPPLE);
     pp->freeze_tics = 0;
     pp->shrink_tics = 0;
+    pp->knee_tics = 0;
+    pp->WpnGrenadeType = 0;
     sp->xrepeat = PLAYER_NINJA_XREPEAT;
     sp->yrepeat = PLAYER_NINJA_YREPEAT;
     sp->clipdist = (char)(256L >> 2);
@@ -2316,6 +2321,7 @@ PlayerGameReset(PLAYERp pp)
 	pp->WpnMineType = 0;                 // Standard sticky bomb
     pp->WpnRailType = 0;
     pp->WpnHeartType = 0;
+    pp->WpnGrenadeType = 0;
     pp->HasShrinkRay = 0;
     pp->HasFreezeGun = 0;
     pp->WpnShotgunAuto = 0;            // 50-0 automatic shotgun rounds

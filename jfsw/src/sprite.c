@@ -6190,7 +6190,7 @@ DoGet(short SpriteNum)
                     break;
                 pp->HasShrinkRay = 1;
                 pp->WpnRailType = 1;
-                PutStringInfo(Player+pnum, "Shrink Ray! Shoot Mirrors to Shrink Yourself");
+                PutStringInfo(Player+pnum, "Picked up Duke 3D SHRINKER! (Key 6 toggles Rail/Shrinker)");
                 }
             else
                 {
@@ -6362,7 +6362,7 @@ DoGet(short SpriteNum)
                     break;
                 pp->HasFreezeGun = 1;
                 pp->WpnHeartType = 1;
-                PutStringInfo(Player+pnum, "Ice Crystal Gun! Freezes Enemies for 10s");
+                PutStringInfo(Player+pnum, "Picked up Duke 3D FREEZETHROWER! (Key 7 toggles Heart/Freezer)");
                 }
             else
                 {
@@ -7375,19 +7375,24 @@ move_missile(short spritenum, int xchange, int ychange, int zchange, int ceildis
 
     daz = sp->z + ((zchange * numtics) >> 3);
 
-    // NOTE: this does not tell you when you hit a floor sprite
-    // this case is currently treated like it hit a sector
+    // Transition across Room-Over-Room roof/floor holes BEFORE clamping ceiling/floor Z!
+    if (FAF_ConnectArea(sp->sectnum))
+        {
+        setspritez(spritenum, sp->x, sp->y, daz);
+        dasectnum = sp->sectnum;
+        DoActorGlobZ(spritenum);
+        MissileWaterAdjust(spritenum);
+        }
 
     // test for hitting ceiling or floor
-    // Allow missiles/grenades to arc above open parallax sky ceilings (roofs/holes)
+    // Allow missiles/grenades to arc high above open parallax sky ceilings (roofs/holes)
     if (daz - zh <= ((TEST(sector[sp->sectnum].ceilingstat, CEILING_STAT_PLAX) &&
                       sector[sp->sectnum].ceilingpicnum != FAF_MIRROR_PIC &&
-                      !u->hi_sp) ? (u->hiz - Z(256)) : (u->hiz + ceildist)))
+                      !u->hi_sp) ? (u->hiz - Z(512)) : (u->hiz + ceildist)))
         {
-        // normal code
         sp->z = ((TEST(sector[sp->sectnum].ceilingstat, CEILING_STAT_PLAX) &&
                   sector[sp->sectnum].ceilingpicnum != FAF_MIRROR_PIC &&
-                  !u->hi_sp) ? (u->hiz - Z(256)) : (u->hiz + ceildist)) + zh;
+                  !u->hi_sp) ? (u->hiz - Z(512)) : (u->hiz + ceildist)) + zh;
         if (retval == 0)
             retval = dasectnum|HIT_SECTOR;
         }

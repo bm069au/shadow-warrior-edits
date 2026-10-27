@@ -2687,9 +2687,36 @@ STATE s_PaperShrapC[] =
     };
 
 #if 1
+#ifndef SPR2_ICE_NUKE
+#define SPR2_ICE_NUKE (BIT(26))
+#endif
+
 BOOL MissileHitMatch(short Weapon, short WeaponNum, short hitsprite)
     {
     SPRITEp hsp = &sprite[hitsprite];
+
+    // Booby-trapped hiding room Wall Cracks (hitag 9950..9960):
+    // Shooting or bombing the crack from outside or inside detonates all matching cracks in the hiding room!
+    if (hsp->hitag >= 9950 && hsp->hitag <= 9960)
+        {
+        short match = hsp->hitag;
+        short i, nexti;
+        TRAVERSE_SPRITE_STAT(headspritestat[STAT_SPRITE_HIT_MATCH], i, nexti)
+            {
+            if (sprite[i].hitag == match)
+                {
+                short b = SpawnSprite(STAT_MISSILE, GRENADE, &s_Grenade[0][0], sprite[i].sectnum,
+                    sprite[i].x, sprite[i].y, sprite[i].z - Z(12), sprite[i].ang, 0);
+                if (Weapon >= 0 && sprite[Weapon].owner >= 0)
+                    SetOwner(sprite[Weapon].owner, b);
+                User[b]->Counter2 = 0; // Standard explosive blast inside the hiding room
+                SpawnGrenadeExp(b);
+                KillSprite(b);
+                KillSprite(i);
+                }
+            }
+        return(TRUE);
+        }
 
     if (WeaponNum <= -1)
         {
@@ -7170,9 +7197,6 @@ else if (u->Counter3 == 4)
         else
             damage = GetDamage(SpriteNum, Weapon, DMG_GRENADE_EXP);
 
-        //DSPRINTF(ds,"MUSHROOM: damage = %d, wu->radius = %d\n",damage,wu->Radius);
-        //MONO_PRINT(ds);
-
         if (u->sop_parent)
             {
             if (TEST(u->sop_parent->flags, SOBJ_DIE_HARD))
@@ -7184,6 +7208,38 @@ else if (u->Counter3 == 4)
         else
         if (u->PlayerP)
             {
+            PLAYERp fpp = u->PlayerP;
+            if (TEST(wu->Flags2, SPR2_ICE_NUKE) || wp->pal == PALETTE_BLUE_LIGHTING)
+                {
+                if (!TEST(fpp->Flags, PF_DEAD) && !TEST(fpp->Flags, PF_CLIP_CHEAT) && !GodMode)
+                    {
+                    SET(fpp->Flags2, PF2_FROZEN);
+                    fpp->freeze_tics = SEC(10);
+                    RESET(fpp->Flags2, PF2_GRAPPLING);
+                    if (fpp->Armor > 0)
+                        PlayerUpdateArmor(fpp, -fpp->Armor);
+                    if (u->Health > 20)
+                        PlayerUpdateHealth(fpp, -(u->Health - 20));
+                    sp->pal = PALETTE_BLUE_LIGHTING;
+                    fpp->xvect = 0;
+                    fpp->yvect = 0;
+                    SetFadeAmt(fpp, -50, 208);
+                    PutStringInfo(fpp, "FROZEN by Ice Nuke Grenade! (HP=20, 0 Armor)");
+                    PlaySound(DIGI_ITEM, &sp->x, &sp->y, &sp->z, v3df_none);
+                    }
+                break;
+                }
+            if (TEST(fpp->Flags2, PF2_FROZEN))
+                {
+                void SpawnDukeIceShatter(short SpriteNum, BOOL is_ice);
+                RESET(fpp->Flags2, PF2_FROZEN);
+                fpp->freeze_tics = 0;
+                SpawnDukeIceShatter(SpriteNum, TRUE);
+                fpp->DeathType = PLAYER_DEATH_CRUMBLE;
+                PlayerUpdateHealth(fpp, -9999);
+                PlayerCheckDeath(fpp, Weapon);
+                break;
+                }
             PlayerDamageSlide(u->PlayerP, damage, ANG2PLAYER(u->PlayerP, wp));
             if (PlayerTakeDamage(u->PlayerP, Weapon))
                 {
@@ -9289,8 +9345,9 @@ DoGrenade(SHORT Weapon)
         switch (TEST(u->ret, HIT_MASK))
             {
         case HIT_PLAX_WALL:
-            KillSprite(Weapon);
-            return(TRUE);
+            // Do NOT delete grenades in open sky sectors; let gravity pull them back down over roofs/holes!
+            u->ret = 0;
+            break;
         case HIT_SPRITE:
                 {
                 short wall_ang;
@@ -11197,10 +11254,52 @@ DoBoltSeeker(SHORT Weapon)
     return (FALSE);
     }
 
+static STATE s_DukeShrinkExp[] =
+    {
+    {DUKE_SHRINKEXP + 0, 4, NullAnimator, &s_DukeShrinkExp[1]},
+    {DUKE_SHRINKEXP + 1, 4, NullAnimator, &s_DukeShrinkExp[2]},
+    {DUKE_SHRINKEXP + 2, 4, NullAnimator, &s_DukeShrinkExp[3]},
+    {DUKE_SHRINKEXP + 3, 4, DoSuicide,    &s_DukeShrinkExp[0]}
+    };
+
+static void SpawnDukeShrinkExp(SHORT Weapon)
+    {
+    SPRITEp sp = &sprite[Weapon];
+    short e = SpawnSprite(STAT_MISSILE, DUKE_SHRINKEXP, s_DukeShrinkExp, sp->sectnum,
+        sp->x, sp->y, sp->z, sp->ang, 0);
+    SPRITEp ep = &sprite[e];
+    ep->xrepeat = 42;
+    ep->yrepeat = 42;
+    ep->shade = -127;
+    ep->pal = 0;
+    RESET(ep->cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+    }
+
+void SpawnDukeIceShatter(short SpriteNum, BOOL is_ice)
+    {
+    SPRITEp sp = &sprite[SpriteNum];
+    int j;
+    PlaySound(is_ice ? DIGI_BREAKGLASS : DIGI_GIBS1, &sp->x, &sp->y, &sp->z, v3df_none);
+    for (j = 0; j < (is_ice ? 40 : 12); j++)
+        {
+        short pic = is_ice ? (DUKE_GLASSPIECES + (j % 3)) : COOLG_DRIP;
+        short k = SpawnSprite(STAT_MISSILE, pic, s_GoreFloorSplash, sp->sectnum,
+            sp->x + RANDOM_P2(128) - 64,
+            sp->y + RANDOM_P2(128) - 64,
+            sp->z - Z(RANDOM_P2(32)),
+            RANDOM_P2(2048), 120 + RANDOM_P2(256));
+        sprite[k].xrepeat = is_ice ? 32 : 28;
+        sprite[k].yrepeat = is_ice ? 32 : 28;
+        sprite[k].shade = is_ice ? -32 : 0;
+        sprite[k].pal = is_ice ? PALETTE_BLUE_LIGHTING : 0;
+        RESET(sprite[k].cstat, CSTAT_SPRITE_BLOCK | CSTAT_SPRITE_BLOCK_HITSCAN);
+        }
+    }
+
 int
 DoBoltShrapnel(SHORT Weapon)
     {
-    // Shrink Ray Bolt (Mirror-Reflecting Energy Projectile)
+    // Duke 3D SHRINKSPARK (Mirror-Reflecting Shrinker Projectile)
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
 
@@ -11255,18 +11354,15 @@ DoBoltShrapnel(SHORT Weapon)
                     if (!TEST(tpp->Flags, PF_DEAD))
                         {
                         SET(tpp->Flags2, PF2_SHRUNK);
-                        tpp->shrink_tics = SEC(10);
-                        hsp->xrepeat = 14;
-                        hsp->yrepeat = 14;
-                        hsp->clipdist = 16;
+                        tpp->shrink_tics = SEC(11); // 1s smooth Duke shrink-down + 10s shrunk
+                        hsp->clipdist = 14;
                         tpp->floor_dist = Z(6);
                         tpp->ceiling_dist = Z(4);
-                        tpp->posz = tpp->loz - Z(14);
-                        SetFadeAmt(tpp, -40, 144);
-                        PutStringInfo(tpp, "Shrunk for 10 Seconds!");
+                        SetFadeAmt(tpp, -48, 144);
+                        PutStringInfo(tpp, "Shrunk by Duke 3D Shrinker!");
                         PlaySound(DIGI_ITEM, &hsp->x, &hsp->y, &hsp->z, v3df_none);
                         }
-                    SpawnBoltExp(Weapon);
+                    SpawnDukeShrinkExp(Weapon);
                     KillSprite(Weapon);
                     return(TRUE);
                     }
@@ -11274,7 +11370,7 @@ DoBoltShrapnel(SHORT Weapon)
                     {
                     hsp->xrepeat = max(12, hsp->xrepeat >> 1);
                     hsp->yrepeat = max(12, hsp->yrepeat >> 1);
-                    SpawnBoltExp(Weapon);
+                    SpawnDukeShrinkExp(Weapon);
                     KillSprite(Weapon);
                     return(TRUE);
                     }
@@ -11284,7 +11380,7 @@ DoBoltShrapnel(SHORT Weapon)
 
         if (WeaponMoveHit(Weapon))
             {
-            SpawnBoltExp(Weapon);
+            SpawnDukeShrinkExp(Weapon);
             KillSprite(Weapon);
             return(TRUE);
             }
@@ -11296,7 +11392,7 @@ DoBoltShrapnel(SHORT Weapon)
 int
 DoBoltFatMan(SHORT Weapon)
     {
-    // Ice Crystal Gun Projectile (Freezes enemy players for 10s & drops HP to 20)
+    // Duke 3D FREEZEBLAST Projectile (Bounces off walls up to 3x, freezes players for 10s & sets HP=20)
     SPRITEp sp = &sprite[Weapon];
     USERp u = User[Weapon];
 
@@ -11313,6 +11409,28 @@ DoBoltFatMan(SHORT Weapon)
                 KillSprite(Weapon);
                 return(TRUE);
 
+            case HIT_WALL:
+                {
+                short hitwall = NORM_WALL(u->ret);
+                WALLp wp = &wall[hitwall];
+                if (u->Counter < 3)
+                    {
+                    short nw = wp->point2;
+                    short wall_tan = NORM_ANGLE(getangle(wall[nw].x - wp->x, wall[nw].y - wp->y));
+                    sp->ang = NORM_ANGLE((wall_tan << 1) - sp->ang);
+                    u->xchange = MOVEx(sp->xvel, sp->ang);
+                    u->ychange = MOVEy(sp->xvel, sp->ang);
+                    u->zchange = -u->zchange;
+                    u->Counter++;
+                    sp->xrepeat = max(10, sp->xrepeat - 5);
+                    sp->yrepeat = max(10, sp->yrepeat - 5);
+                    sp->owner = -1;
+                    RESET(u->Flags2, SPR2_DONT_TARGET_OWNER);
+                    return(FALSE);
+                    }
+                break;
+                }
+
             case HIT_SPRITE:
                 {
                 short hitsprite = NORM_SPRITE(u->ret);
@@ -11326,9 +11444,12 @@ DoBoltFatMan(SHORT Weapon)
                         {
                         if (TEST(fpp->Flags2, PF2_FROZEN))
                             {
-                            // Shatter already-frozen player!
+                            // Shatter already-frozen player into Duke 3D ice shards!
+                            RESET(fpp->Flags2, PF2_FROZEN);
+                            fpp->freeze_tics = 0;
+                            SpawnDukeIceShatter(hitsprite, TRUE);
                             fpp->DeathType = PLAYER_DEATH_CRUMBLE;
-                            PlayerUpdateHealth(fpp, -50);
+                            PlayerUpdateHealth(fpp, -9999);
                             PlayerCheckDeath(fpp, Weapon);
                             }
                         else
@@ -11341,7 +11462,7 @@ DoBoltFatMan(SHORT Weapon)
                                 PlayerUpdateHealth(fpp, -(hu->Health - 20));
                             hsp->pal = PALETTE_BLUE_LIGHTING;
                             SetFadeAmt(fpp, -50, 208);
-                            PutStringInfo(fpp, "Frozen by Ice Crystal Gun!");
+                            PutStringInfo(fpp, "Frozen by Duke 3D Freezethrower!");
                             PlaySound(DIGI_ITEM, &hsp->x, &hsp->y, &hsp->z, v3df_none);
                             }
                         }
@@ -12099,6 +12220,12 @@ BRETT_MARK("NUK-003", "before mushroom cloud spawn");
     InitChemBomb(explosion);
 
 
+    if (TEST(u->Flags2, SPR2_ICE_NUKE) || u->Counter2 == 2)
+        {
+        eu->spal = exp->pal = PALETTE_BLUE_LIGHTING;
+        SET(eu->Flags2, SPR2_ICE_NUKE);
+        }
+
     // Do central explosion
     explosion = SpawnSprite(STAT_MISSILE, MUSHROOM_CLOUD, s_GrenadeExp, sp->sectnum,
         sp->x, sp->y, sp->z, sp->ang, 0);
@@ -12106,6 +12233,11 @@ BRETT_MARK("NUK-003", "before mushroom cloud spawn");
     eu = User[explosion];
 
     SetOwner(sp->owner, explosion);
+    if (TEST(u->Flags2, SPR2_ICE_NUKE) || u->Counter2 == 2)
+        {
+        eu->spal = exp->pal = PALETTE_BLUE_LIGHTING;
+        SET(eu->Flags2, SPR2_ICE_NUKE);
+        }
     exp->shade = -128;
     exp->xrepeat = 218;
     exp->yrepeat = 152;
@@ -12444,9 +12576,11 @@ SpawnGrenadeExp(SHORT Weapon)
         return (-1);
 	
 	// Brett edit:
-// Player grenades trigger full nuclear explosion.
-// Monster grenades remain standard to avoid crashes.
-if (OwnerIsPlayer(Weapon))
+// Grenade Launcher 3-Mode support:
+// Mode 0 (u->Counter2 == 0): Normal Grenades
+// Mode 1 (u->Counter2 == 1): Nuclear Grenades
+// Mode 2 (u->Counter2 == 2 / SPR2_ICE_NUKE): Ice Nuke Grenades
+if (OwnerIsPlayer(Weapon) && (u->Counter2 == 1 || u->Counter2 == 2 || TEST(u->Flags2, SPR2_ICE_NUKE)))
     return SpawnNuclearExp(Weapon);
 
     PlaySound(DIGI_30MMEXPLODE, &sp->x, &sp->y, &sp->z, v3df_none);
@@ -16186,12 +16320,18 @@ InitRail(PLAYERp pp)
 
 static STATE s_ShrinkRayBolt[] =
     {
-    {BOLT_THINMAN_R0 + 0, BOLT_THINMAN_RATE, DoBoltShrapnel, &s_ShrinkRayBolt[0]}
+    {DUKE_SHRINKSPARK + 0, 4, DoBoltShrapnel, &s_ShrinkRayBolt[1]},
+    {DUKE_SHRINKSPARK + 1, 4, DoBoltShrapnel, &s_ShrinkRayBolt[2]},
+    {DUKE_SHRINKSPARK + 2, 4, DoBoltShrapnel, &s_ShrinkRayBolt[3]},
+    {DUKE_SHRINKSPARK + 3, 4, DoBoltShrapnel, &s_ShrinkRayBolt[0]}
     };
 
 static STATE s_IceCrystalBolt[] =
     {
-    {BOLT_THINMAN_R0 + 0, BOLT_THINMAN_RATE, DoBoltFatMan, &s_IceCrystalBolt[0]}
+    {DUKE_FREEZEBLAST + 0, 4, DoBoltFatMan, &s_IceCrystalBolt[1]},
+    {DUKE_FREEZEBLAST + 1, 4, DoBoltFatMan, &s_IceCrystalBolt[2]},
+    {DUKE_FREEZEBLAST + 2, 4, DoBoltFatMan, &s_IceCrystalBolt[3]},
+    {DUKE_FREEZEBLAST + 1, 4, DoBoltFatMan, &s_IceCrystalBolt[0]}
     };
 
 int
@@ -16213,18 +16353,18 @@ InitShrinkRay(PLAYERp pp)
     ny = pp->posy;
     nz = pp->posz + pp->bob_z + (TEST(pp->Flags2, PF2_SHRUNK) ? Z(4) : Z(11));
 
-    w = SpawnSprite(STAT_MISSILE, BOLT_THINMAN_R0, s_ShrinkRayBolt, pp->cursectnum,
-        nx, ny, nz, pp->pang, 1200);
+    w = SpawnSprite(STAT_MISSILE, DUKE_SHRINKSPARK, s_ShrinkRayBolt, pp->cursectnum,
+        nx, ny, nz, pp->pang, 1536);
 
     wp = &sprite[w];
     wu = User[w];
 
     SetOwner(pp->PlayerSprite, w);
     SET(wu->Flags2, SPR2_DONT_TARGET_OWNER);
-    wp->xrepeat = 32;
-    wp->yrepeat = 32;
-    wp->shade = -40;
-    wp->pal = wu->spal = PALETTE_GREEN_LIGHTING;
+    wp->xrepeat = 28;
+    wp->yrepeat = 28;
+    wp->shade = -127;
+    wp->pal = wu->spal = 0;
     zvel = ((100 - pp->horiz) * (HORIZ_MULT + 17));
 
     wu->WeaponNum = u->WeaponNum;
@@ -16271,18 +16411,18 @@ InitIceCrystalGun(PLAYERp pp)
     ny = pp->posy;
     nz = pp->posz + pp->bob_z + (TEST(pp->Flags2, PF2_SHRUNK) ? Z(4) : Z(11));
 
-    w = SpawnSprite(STAT_MISSILE, BOLT_THINMAN_R0, s_IceCrystalBolt, pp->cursectnum,
-        nx, ny, nz, pp->pang, 1400);
+    w = SpawnSprite(STAT_MISSILE, DUKE_FREEZEBLAST, s_IceCrystalBolt, pp->cursectnum,
+        nx, ny, nz, pp->pang, 1288);
 
     wp = &sprite[w];
     wu = User[w];
 
     SetOwner(pp->PlayerSprite, w);
     SET(wu->Flags2, SPR2_DONT_TARGET_OWNER);
-    wp->xrepeat = 40;
-    wp->yrepeat = 40;
-    wp->shade = -40;
-    wp->pal = wu->spal = PALETTE_BLUE_LIGHTING;
+    wp->xrepeat = 26;
+    wp->yrepeat = 26;
+    wp->shade = -127;
+    wp->pal = wu->spal = 0;
     zvel = ((100 - pp->horiz) * (HORIZ_MULT + 20));
 
     wu->WeaponNum = WPN_HEART;
@@ -20267,6 +20407,14 @@ InitGrenade(PLAYERp pp)
     wu->ceiling_dist = Z(3);
     wu->floor_dist = Z(3);
     wu->Counter = 0;
+    wu->Counter2 = pp->WpnGrenadeType;
+    if (pp->WpnGrenadeType == 1)
+        wp->pal = wu->spal = PALETTE_RED_LIGHTING;
+    else if (pp->WpnGrenadeType == 2)
+        {
+        wp->pal = wu->spal = PALETTE_BLUE_LIGHTING;
+        SET(wu->Flags2, SPR2_ICE_NUKE);
+        }
     SET(wp->cstat, CSTAT_SPRITE_YCENTER);
     SET(wp->cstat, CSTAT_SPRITE_BLOCK);
 

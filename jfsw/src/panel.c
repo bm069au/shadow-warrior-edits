@@ -929,7 +929,7 @@ WeaponOperate(PLAYERp pp)
                             {
                             pp->WpnRailType = !pp->WpnRailType;
                             if (pp->WpnRailType == 1)
-                                PutStringInfo(pp, "Shrink Ray");
+                                PutStringInfo(pp, "Duke 3D Shrinker");
                             else
                                 PutStringInfo(pp, "Rail Gun");
                             PlaySound(DIGI_RAIL_UP, &pp->posx, &pp->posy, &pp->posz, v3df_follow|v3df_dontpan);
@@ -971,7 +971,7 @@ WeaponOperate(PLAYERp pp)
                             {
                             pp->WpnHeartType = !pp->WpnHeartType;
                             if (pp->WpnHeartType == 1)
-                                PutStringInfo(pp, "Ice Crystal Gun");
+                                PutStringInfo(pp, "Duke 3D Freezethrower");
                             else
                                 PutStringInfo(pp, "Ripper Heart");
                             PlaySound(DIGI_HEARTBEAT, &pp->posx, &pp->posy, &pp->posz, v3df_follow|v3df_dontpan);
@@ -988,7 +988,27 @@ WeaponOperate(PLAYERp pp)
                         PutStringInfo(pp,"Order the full version");
                     break;
                 case WPN_GRENADE:
+                    if (u->WeaponNum == WPN_GRENADE)
+                        {
+                        pp->WpnGrenadeType = (pp->WpnGrenadeType + 1) % 3;
+                        if (pp->WpnGrenadeType == 0)
+                            PutStringInfo(pp, "Grenade Mode: NORMAL GRENADES");
+                        else if (pp->WpnGrenadeType == 1)
+                            PutStringInfo(pp, "Grenade Mode: NUCLEAR GRENADES");
+                        else
+                            PutStringInfo(pp, "Grenade Mode: ICE NUKE GRENADES");
+                        PlaySound(DIGI_GRENADE_UP, &pp->posx, &pp->posy, &pp->posz, v3df_follow|v3df_dontpan);
+                        }
                     InitWeaponGrenade(pp);
+                    if (pp->Wpn[WPN_GRENADE])
+                        {
+                        if (pp->WpnGrenadeType == 1)
+                            pp->Wpn[WPN_GRENADE]->pal = PALETTE_RED_LIGHTING;
+                        else if (pp->WpnGrenadeType == 2)
+                            pp->Wpn[WPN_GRENADE]->pal = PALETTE_BLUE_LIGHTING;
+                        else
+                            pp->Wpn[WPN_GRENADE]->pal = 0;
+                        }
                     break;
 case WPN_MINE:
     if (u->WeaponNum == WPN_MINE)
@@ -5570,7 +5590,12 @@ InitWeaponGrenade(PLAYERp pp)
 
     // Set up the new Weapon variables
     psp = pp->CurWpn = pp->Wpn[WPN_GRENADE];
-    psp = pp->CurWpn = pp->Wpn[WPN_GRENADE];
+    if (pp->WpnGrenadeType == 1)
+        psp->pal = PALETTE_RED_LIGHTING;
+    else if (pp->WpnGrenadeType == 2)
+        psp->pal = PALETTE_BLUE_LIGHTING;
+    else
+        psp->pal = 0;
     SET(psp->flags, PANF_WEAPON_SPRITE);
     psp->ActionState = ps_GrenadeFire;
     psp->RetractState = ps_RetractGrenade;
@@ -7521,6 +7546,182 @@ pDisplaySprites(PLAYERp pp)
             {
             psp->numpages = 0;
             SET(flags, ROTATE_SPRITE_ALL_PAGES);
+            }
+
+        if (TEST(psp->flags, PANF_WEAPON_SPRITE))
+            {
+            if (pp->Wpn[WPN_GRENADE] == psp)
+                {
+                if (pp->WpnGrenadeType == 1)
+                    pal = PALETTE_RED_LIGHTING;
+                else if (pp->WpnGrenadeType == 2)
+                    pal = PALETTE_BLUE_LIGHTING;
+                }
+
+            // Foot-stomp / quick-kick overlay when stomping shrunken player or shattering frozen player
+            if (pp->knee_tics > 0)
+                {
+                short k_frame = (pp->knee_tics > 10 && pp->knee_tics < 22) ? (DUKE_KNEE_HUD + 1) : DUKE_KNEE_HUD;
+                int kx = (pp->knee_tics > 10 && pp->knee_tics < 22) ? 144 : 80;
+                int ky = (pp->knee_tics > 10 && pp->knee_tics < 22) ? 214 : 250;
+                rotatesprite(kx << 16, ky << 16, 65536L, 1024, k_frame, shade, 0,
+                    flags | ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                }
+
+            // Duke 3D Shrunken Player Pumping Tiny Fists on HUD!
+            if (TEST(pp->Flags2, PF2_SHRUNK))
+                {
+                int spd = ksqrt(SQ(pp->xvect >> 14) + SQ(pp->yvect >> 14));
+                int fistsign = (totalclock * 18 + (spd << 2)) & 2047;
+                int wx = sintable[fistsign] >> 10;
+                int wy = klabs(sintable[fistsign] >> 8);
+                int look_arc = 28 - (spd >> 4);
+                rotatesprite((250 + wx) << 16, (258 + look_arc - wy) << 16, 65536L, 0,
+                    DUKE_FIST_HUD, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                rotatesprite((40 - wx) << 16, (200 + look_arc + wy) << 16, 65536L, 1024,
+                    DUKE_FIST_HUD, shade, 0, flags | ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                continue;
+                }
+
+            // Duke 3D Shrinker first-person HUD weapon (gun body + pulsing green crystal core)
+            if (u->WeaponNum == WPN_RAIL && pp->WpnRailType == 1)
+                {
+                int bobx = psp->x - RAIL_XOFF;
+                int boby = psp->y - RAIL_YOFF;
+                BOOL firing = (psp->State != psp->RestState && psp->State != psp->PresentState && psp->State != psp->RetractState);
+                if (!firing)
+                    {
+                    signed char crys_shade = (signed char)(16 - (sintable[(totalclock << 4) & 2047] >> 10));
+                    rotatesprite((212 + bobx) << 16, (258 + boby) << 16, 65536L, 0,
+                        DUKE_SHRINKER_HUD + 2, crys_shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    rotatesprite((216 + bobx) << 16, (258 + boby) << 16, 65536L, 0,
+                        DUKE_SHRINKER_HUD, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                else
+                    {
+                    int jx = (totalclock & 3);
+                    int jy = ((totalclock >> 1) & 3);
+                    short cframe = DUKE_SHRINKER_HUD + 3 + ((totalclock >> 2) % 3);
+                    rotatesprite((212 + bobx + jx) << 16, (258 + boby + jy) << 16, 65536L, 0,
+                        cframe, -32, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    rotatesprite((216 + bobx + jx) << 16, (258 + boby + jy) << 16, 65536L, 0,
+                        DUKE_SHRINKER_HUD + 1, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                continue;
+                }
+
+            // Duke 3D Freezethrower first-person HUD weapon
+            if (u->WeaponNum == WPN_HEART && pp->WpnHeartType == 1)
+                {
+                int bobx = psp->x - 160;
+                int boby = psp->y - 200;
+                if (boby < -40) boby = 0;
+                BOOL firing = (psp->State != psp->RestState && psp->State != psp->PresentState && psp->State != psp->RetractState);
+                if (!firing)
+                    {
+                    rotatesprite((210 + bobx) << 16, (261 + boby) << 16, 65536L, 0,
+                        DUKE_FREEZE_HUD, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                else
+                    {
+                    int jx = (totalclock & 3);
+                    int jy = ((totalclock >> 1) & 3);
+                    short mframe = DUKE_FREEZE_HUD + 3 + ((totalclock >> 2) % 3);
+                    rotatesprite((210 + bobx + jx) << 16, (245 + boby + jy) << 16, 65536L, 0,
+                        DUKE_FREEZE_HUD + 2, -32, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    rotatesprite((210 + bobx + jx) << 16, (219 + boby + jy) << 16, 65536L, 0,
+                        mframe, -32, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                continue;
+                }
+            }
+
+        if (TEST(psp->flags, PANF_WEAPON_SPRITE))
+            {
+            if (pp->Wpn[WPN_GRENADE] == psp)
+                {
+                if (pp->WpnGrenadeType == 1)
+                    pal = PALETTE_RED_LIGHTING;
+                else if (pp->WpnGrenadeType == 2)
+                    pal = PALETTE_BLUE_LIGHTING;
+                }
+
+            // Foot-stomp / quick-kick overlay when stomping shrunken player or shattering frozen player
+            if (pp->knee_tics > 0)
+                {
+                short k_frame = (pp->knee_tics > 10 && pp->knee_tics < 22) ? (DUKE_KNEE_HUD + 1) : DUKE_KNEE_HUD;
+                int kx = (pp->knee_tics > 10 && pp->knee_tics < 22) ? 144 : 80;
+                int ky = (pp->knee_tics > 10 && pp->knee_tics < 22) ? 214 : 250;
+                rotatesprite(kx << 16, ky << 16, 65536L, 1024, k_frame, shade, 0,
+                    flags | ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                }
+
+            // Duke 3D Shrunken Player Pumping Tiny Fists on HUD!
+            if (TEST(pp->Flags2, PF2_SHRUNK))
+                {
+                int spd = ksqrt(SQ(pp->xvect >> 14) + SQ(pp->yvect >> 14));
+                int fistsign = (totalclock * 18 + (spd << 2)) & 2047;
+                int wx = sintable[fistsign] >> 10;
+                int wy = klabs(sintable[fistsign] >> 8);
+                int look_arc = 28 - (spd >> 4);
+                rotatesprite((250 + wx) << 16, (258 + look_arc - wy) << 16, 65536L, 0,
+                    DUKE_FIST_HUD, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                rotatesprite((40 - wx) << 16, (200 + look_arc + wy) << 16, 65536L, 1024,
+                    DUKE_FIST_HUD, shade, 0, flags | ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                continue;
+                }
+
+            // Duke 3D Shrinker first-person HUD weapon (gun body + pulsing green crystal core)
+            if (u->WeaponNum == WPN_RAIL && pp->WpnRailType == 1)
+                {
+                int bobx = psp->x - RAIL_XOFF;
+                int boby = psp->y - RAIL_YOFF;
+                BOOL firing = (psp->State != psp->RestState && psp->State != psp->PresentState && psp->State != psp->RetractState);
+                if (!firing)
+                    {
+                    signed char crys_shade = (signed char)(16 - (sintable[(totalclock << 4) & 2047] >> 10));
+                    rotatesprite((212 + bobx) << 16, (258 + boby) << 16, 65536L, 0,
+                        DUKE_SHRINKER_HUD + 2, crys_shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    rotatesprite((216 + bobx) << 16, (258 + boby) << 16, 65536L, 0,
+                        DUKE_SHRINKER_HUD, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                else
+                    {
+                    int jx = (totalclock & 3);
+                    int jy = ((totalclock >> 1) & 3);
+                    short cframe = DUKE_SHRINKER_HUD + 3 + ((totalclock >> 2) % 3);
+                    rotatesprite((212 + bobx + jx) << 16, (258 + boby + jy) << 16, 65536L, 0,
+                        cframe, -32, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    rotatesprite((216 + bobx + jx) << 16, (258 + boby + jy) << 16, 65536L, 0,
+                        DUKE_SHRINKER_HUD + 1, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                continue;
+                }
+
+            // Duke 3D Freezethrower first-person HUD weapon
+            if (u->WeaponNum == WPN_HEART && pp->WpnHeartType == 1)
+                {
+                int bobx = psp->x - 160;
+                int boby = psp->y - 200;
+                if (boby < -40) boby = 0;
+                BOOL firing = (psp->State != psp->RestState && psp->State != psp->PresentState && psp->State != psp->RetractState);
+                if (!firing)
+                    {
+                    rotatesprite((210 + bobx) << 16, (261 + boby) << 16, 65536L, 0,
+                        DUKE_FREEZE_HUD, shade, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                else
+                    {
+                    int jx = (totalclock & 3);
+                    int jy = ((totalclock >> 1) & 3);
+                    short mframe = DUKE_FREEZE_HUD + 3 + ((totalclock >> 2) % 3);
+                    rotatesprite((210 + bobx + jx) << 16, (245 + boby + jy) << 16, 65536L, 0,
+                        DUKE_FREEZE_HUD + 2, -32, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    rotatesprite((210 + bobx + jx) << 16, (219 + boby + jy) << 16, 65536L, 0,
+                        mframe, -32, 0, flags & ~ROTATE_SPRITE_YFLIP, x1, y1, x2, y2);
+                    }
+                continue;
+                }
             }
 
         rotatesprite(x, y,

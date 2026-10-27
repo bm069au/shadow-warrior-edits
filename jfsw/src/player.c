@@ -8383,8 +8383,63 @@ domovethings(VOID)
             Player[screenpeek].pang = getangle(Player[myconnectindex].posx - Player[screenpeek].posx, Player[myconnectindex].posy - Player[screenpeek].posy);
             }
 
+        if (pp->knee_tics > 0)
+            {
+            pp->knee_tics -= synctics;
+            if (pp->knee_tics < 0)
+                pp->knee_tics = 0;
+            }
+
+        // Duke 3D Foot-Stomp (shrunken player squish) & Frozen Player Quick-Kick Shatter!
+        if (!TEST(pp->Flags, PF_DEAD) && !TEST(pp->Flags2, PF2_SHRUNK) && !TEST(pp->Flags2, PF2_FROZEN))
+            {
+            short opnum;
+            TRAVERSE_CONNECT(opnum)
+                {
+                if (opnum == pnum)
+                    continue;
+                PLAYERp opp = Player + opnum;
+                if (TEST(opp->Flags, PF_DEAD) || !opp->SpriteP)
+                    continue;
+                int dx = opp->posx - pp->posx;
+                int dy = opp->posy - pp->posy;
+                int dz = (opp->posz - pp->posz) >> 4;
+                int dist = ksqrt(SQ(dx) + SQ(dy) + SQ(dz));
+                if (TEST(opp->Flags2, PF2_SHRUNK) && dist < 850)
+                    {
+                    void SpawnDukeIceShatter(short SpriteNum, BOOL is_ice);
+                    pp->knee_tics = 30;
+                    RESET(opp->Flags2, PF2_SHRUNK);
+                    opp->shrink_tics = 0;
+                    opp->SpriteP->xrepeat = PLAYER_NINJA_XREPEAT;
+                    opp->SpriteP->yrepeat = PLAYER_NINJA_YREPEAT;
+                    opp->SpriteP->clipdist = (char)(256L >> 2);
+                    SpawnDukeIceShatter(opp->PlayerSprite, FALSE);
+                    PutStringInfo(pp, "Stomped a shrunken player!");
+                    PutStringInfo(opp, "You were stomped flat!");
+                    PlayerUpdateHealth(opp, -9999);
+                    PlayerCheckDeath(opp, pp->PlayerSprite);
+                    }
+                else if (TEST(opp->Flags2, PF2_FROZEN) && dist < 900 && pp->knee_tics == 0)
+                    {
+                    void SpawnDukeIceShatter(short SpriteNum, BOOL is_ice);
+                    pp->knee_tics = 30;
+                    RESET(opp->Flags2, PF2_FROZEN);
+                    opp->freeze_tics = 0;
+                    SpawnDukeIceShatter(opp->PlayerSprite, TRUE);
+                    PutStringInfo(pp, "Shattered a frozen player!");
+                    PutStringInfo(opp, "Shattered into ice shards!");
+                    opp->DeathType = PLAYER_DEATH_CRUMBLE;
+                    PlayerUpdateHealth(opp, -9999);
+                    PlayerCheckDeath(opp, pp->PlayerSprite);
+                    }
+                }
+            }
+
         if (TEST(pp->Flags2, PF2_SHRUNK))
             {
+            // Disable firing while shrunk (Duke 3D pumping fists active)
+            RESET(pp->input.bits, BIT(SK_SHOOT));
             if (TEST(pp->Flags, PF_DEAD))
                 {
                 RESET(pp->Flags2, PF2_SHRUNK);
@@ -8401,10 +8456,22 @@ domovethings(VOID)
                 pp->shrink_tics -= synctics;
                 if (pp->shrink_tics <= 0)
                     {
-                    if (labs(pp->loz - pp->hiz) < Z(56))
+                    // Duke 3D low-ceiling check (ifgapzl 24 -> SQUISHED!)
+                    if (labs(pp->loz - pp->hiz) < Z(30))
                         {
-                        // Still inside a low mouse-hole tunnel; stay shrunk until clear!
-                        pp->shrink_tics = 1;
+                        void SpawnDukeIceShatter(short SpriteNum, BOOL is_ice);
+                        RESET(pp->Flags2, PF2_SHRUNK);
+                        pp->shrink_tics = 0;
+                        if (pp->SpriteP)
+                            {
+                            pp->SpriteP->xrepeat = PLAYER_NINJA_XREPEAT;
+                            pp->SpriteP->yrepeat = PLAYER_NINJA_YREPEAT;
+                            pp->SpriteP->clipdist = (char)(256L >> 2);
+                            }
+                        SpawnDukeIceShatter(pp->PlayerSprite, FALSE);
+                        PutStringInfo(pp, "Unshrunk inside a mouse-hole - SQUISHED!");
+                        PlayerUpdateHealth(pp, -9999);
+                        PlayerCheckDeath(pp, -1);
                         }
                     else
                         {
@@ -8426,9 +8493,23 @@ domovethings(VOID)
                     {
                     if (pp->SpriteP)
                         {
-                        pp->SpriteP->xrepeat = 14;
-                        pp->SpriteP->yrepeat = 14;
-                        pp->SpriteP->clipdist = 16;
+                        // Smooth Duke 3D shrink-down during first 1s (SEC(10)..SEC(11)) and grow-up during last 0.5s
+                        short target_x = 12, target_y = 12;
+                        if (pp->shrink_tics > SEC(10))
+                            {
+                            int frac = pp->shrink_tics - SEC(10); // 120 down to 0
+                            target_x = (short)(12 + ((PLAYER_NINJA_XREPEAT - 12) * frac) / SEC(1));
+                            target_y = (short)(12 + ((PLAYER_NINJA_YREPEAT - 12) * frac) / SEC(1));
+                            }
+                        else if (pp->shrink_tics < 60)
+                            {
+                            int frac = 60 - pp->shrink_tics; // 0 up to 60
+                            target_x = (short)(12 + ((PLAYER_NINJA_XREPEAT - 12) * frac) / 60);
+                            target_y = (short)(12 + ((PLAYER_NINJA_YREPEAT - 12) * frac) / 60);
+                            }
+                        pp->SpriteP->xrepeat = (unsigned char)target_x;
+                        pp->SpriteP->yrepeat = (unsigned char)target_y;
+                        pp->SpriteP->clipdist = 14;
                         }
                     pp->floor_dist = Z(6);
                     pp->ceiling_dist = Z(4);

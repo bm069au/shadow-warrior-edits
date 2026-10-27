@@ -852,6 +852,80 @@ analyzesprites(int viewx, int viewy, int viewz, BOOL mirror)
         // Does autosizing and voxel handling
         JAnalyzeSprites(tsp);
 
+        if (SpriteNum >= 0 && SpriteNum < MAXSPRITES)
+            {
+            short htag = sprite[SpriteNum].hitag;
+            if (htag == 9902)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_SHRINK_PICKUP;
+                tsp->pal = 0;
+                tsp->xrepeat = 40;
+                tsp->yrepeat = 40;
+                }
+            else if (htag == 9903)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_FREEZE_PICKUP;
+                tsp->pal = 0;
+                tsp->xrepeat = 44;
+                tsp->yrepeat = 44;
+                }
+            else if (htag == 9904)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_CRYSTAL_AMMO;
+                tsp->pal = 0;
+                tsp->xrepeat = 40;
+                tsp->yrepeat = 40;
+                }
+            else if (htag == 9905)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_FREEZE_AMMO;
+                tsp->pal = 0;
+                tsp->xrepeat = 40;
+                tsp->yrepeat = 40;
+                }
+            }
+
+        if (SpriteNum >= 0 && SpriteNum < MAXSPRITES)
+            {
+            short htag = sprite[SpriteNum].hitag;
+            if (htag == 9902)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_SHRINK_PICKUP;
+                tsp->pal = 0;
+                tsp->xrepeat = 40;
+                tsp->yrepeat = 40;
+                }
+            else if (htag == 9903)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_FREEZE_PICKUP;
+                tsp->pal = 0;
+                tsp->xrepeat = 44;
+                tsp->yrepeat = 44;
+                }
+            else if (htag == 9904)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_CRYSTAL_AMMO;
+                tsp->pal = 0;
+                tsp->xrepeat = 40;
+                tsp->yrepeat = 40;
+                }
+            else if (htag == 9905)
+                {
+                RESET(tsp->cstat, CSTAT_SPRITE_SLAB);
+                tsp->picnum = DUKE_FREEZE_AMMO;
+                tsp->pal = 0;
+                tsp->xrepeat = 40;
+                tsp->yrepeat = 40;
+                }
+            }
+
         // only do this of you are a player sprite
         //if (tsp->statnum >= STAT_PLAYER0 && tsp->statnum < STAT_PLAYER0 + MAX_SW_PLAYERS)
         if (tu && tu->PlayerP)

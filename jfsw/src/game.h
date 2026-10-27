@@ -1279,10 +1279,25 @@ struct PLAYERstruct
     short grapple_sect, grapple_tics, grapple_stuck_tics;
     short freeze_tics;
     short shrink_tics;
+    short knee_tics;
+    unsigned char WpnGrenadeType;
     unsigned char WpnHeartType;
     unsigned char HasShrinkRay;
     unsigned char HasFreezeGun;
     };
+
+#define DUKE_FREEZE_PICKUP  5632
+#define DUKE_SHRINK_PICKUP  5633
+#define DUKE_FREEZE_AMMO    5634
+#define DUKE_CRYSTAL_AMMO   5635
+#define DUKE_FREEZE_HUD     5636
+#define DUKE_SHRINKER_HUD   5644
+#define DUKE_FIST_HUD       5651
+#define DUKE_KNEE_HUD       5652
+#define DUKE_FREEZEBLAST    5654
+#define DUKE_SHRINKSPARK    5658
+#define DUKE_SHRINKEXP      5662
+#define DUKE_GLASSPIECES    5682
 
 extern PLAYER Player[MAX_SW_PLAYERS_REG+1];
 
