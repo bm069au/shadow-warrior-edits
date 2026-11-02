@@ -4,23 +4,21 @@ A Windows 10/11 mod build of the JFSW Shadow Warrior source port, created for ch
 
 ---
 
-## ⚠️ Important Notice for Anyone Who Downloaded Between Oct 26 – Nov 2, 2026
+## ⚠️ Important notice: V8 installer and mixed-version files
 
-**We had a packaging and folder-isolation mistake in our initial V8 pre-release upload and installer. If you downloaded the repo or ran `ShadowWarrior_Setup.exe` during that window and your game looked corrupted, here is what happened and how to fix it:**
+An earlier V8 test installer put files for different Shadow Warrior versions together. This can overwrite version-specific files or cause a game to load unintended maps, artwork or settings. The V8 installer remains experimental and its correction is still in progress.
 
-1. **What went wrong:**
-   - The earlier `ShadowWarrior_Setup.exe` installer placed **V7 (Boss Bunnies + Stalker Mines)** and **V8 Beta (Grapple/Shrink/Freeze)** into the same folder alongside loose V8 map overrides (`$bullet.map`, `$dozer.map`, `$shrine.map`, `$woods.map`) and custom art (`TILES022.ART`).
-   - Because the JFSW engine automatically loads any loose `.map` and `.ART` files found in its working directory or in `%APPDATA%\JFShadowWarrior`, running V8 caused V7 (and existing *Shadow Warrior* installs) to load V8's modified maps, mirror textures, and configuration files.
-   - In addition, the `main` branch `README` previously described V7 while the V7 source commits were still sitting unmerged on the `stalker-mines-test` branch.
-2. **How to fix an affected install in 30 seconds:**
-   - **Never mix two versions in one folder.** Keep **V1.0 (Bunny Apocalypse)**, **V7.0 / V7.2_brett (Boss Bunnies + Stalker Mines)**, and **V8.0 Beta** in **separate subdirectories**, each containing its own copy of `SW.GRP`, `sw.cfg`, and an empty file named `user_profiles_disabled` (now included in `jfsw/user_profiles_disabled`, which instructs JFSW to use the local directory instead of `%APPDATA%\JFShadowWarrior`).
-   - If your V7 or original *Shadow Warrior* game shows broken mirrors or V8 rooms, delete any loose `$bullet.map`, `$dozer.map`, `$shrine.map`, `$woods.map`, and `TILES022.ART` from your V7 folder and from `C:\Users\<YourName>\AppData\Roaming\JFShadowWarrior`.
+If you used that installer and a game behaves unexpectedly, **back up your game folders, configuration and saves before making changes**. Do not delete files merely because they share names with V8 files; they may be your own. Verified step-by-step recovery instructions are still being prepared.
+
+Keep each version in its own directory with its matching executable, configuration, saves and required version-specific files. The existing `user_profiles_disabled` marker and a controlled working directory may help, but full isolation from shared data locations has not yet been verified. Please do not install over an existing game or mod directory.
+
+Earlier documentation also described V7 features on `main` while their source was on `stalker-mines-test`; `main` now includes the V7.2 source change. The exact relationship between historical executable builds and source commits remains under investigation.
 
 ---
 
 ## 🎮 Distinct Versions, Branches & Tags (Every Iteration Preserved)
 
-To ensure no version ever overwrites an earlier version, every major edition and iteration is preserved on its own Git branch/tag and must be run in its own separate folder:
+Branches and tags preserve source histories; they do not by themselves prevent installations from overwriting one another. Use a separate directory for each edition:
 
 | Edition / Iteration | Status | What's Inside | Git Branch / Tag |
 | :--- | :--- | :--- | :--- |
@@ -49,7 +47,7 @@ I am looking for fellow **retro shooter fans, C/C++ coders, Build Engine modders
    - `sw.cfg`
    - An empty file named `user_profiles_disabled`
    - Any version-specific `.MAP` or `.ART` files (for V8 Beta only)
-3. **Launch from that folder's working directory** (and ensure the `SWGRP` environment variable is not pointing to another directory).
+3. **Launch from that folder's working directory** (and ensure the `SWGRP` environment variable is not pointing to another directory). Historical builds may still use shared locations; full isolation and version-specific recommended configurations are being verified. Do not overwrite existing files or assume one CFG is correct for every version.
 
 ---
 
