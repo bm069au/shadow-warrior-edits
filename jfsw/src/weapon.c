@@ -10789,7 +10789,8 @@ DoRocket(SHORT Weapon)
         DISTANCE(sp->x, sp->y, u->tgt_sp->x, u->tgt_sp->y, dist, a, b, c);
         u->FlagOwner = dist>>6;
         // Special warn sound attached to each seeker spawned
-        PlaySound(DIGI_MINEBEEP,&sp->x,&sp->y,&sp->z,v3df_follow);
+        // PlaySound(DIGI_MINEBEEP,&sp->x,&sp->y,&sp->z,v3df_follow);
+		// Above line removes homing missile stickbomb beep sound. Brett. 
         }
 
     if (TEST(u->Flags, SPR_FIND_PLAYER))
